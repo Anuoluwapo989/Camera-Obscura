@@ -789,7 +789,7 @@ rimLightFolder.addColor(lightColors, 'rim').name('Gel Color').onChange((value) =
 });
 
 const rimLightHelperToggle = { showHelper: true }
-rimLightFolder.add(rimLightHelperToggle, 'showHelper').name('Show Helper').onChange((val) => rimLightHelper.visible = val)
+rimLightFolder.add(rimLightHelperToggle, 'showHelper').name('Show Rim Light Helper').onChange((val) => rimLightHelper.visible = val)
 rimLightFolder.close()
 
 // --- Turntable GUI ---
