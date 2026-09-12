@@ -1032,4 +1032,5 @@ renderer.setAnimationLoop(animate)
 
 if (window.innerWidth < 768) {
   gui.close() // Start the main menu closed on phones
+  cameraFolder.close()
 }
