@@ -119,7 +119,7 @@ controls.minDistance = 2;  // Prevents zooming directly through the 3D model
 
 // Main Light
 const color = 0xFFFFFF
-const intensity = 164
+const intensity = 230
 const light = new THREE.SpotLight(color, intensity)
 light.position.set(3, 4, 3)
 light.angle = Math.PI / 6
@@ -717,7 +717,7 @@ cycFolder.open()
 // --- AMBIENT BOUNCE LIGHT ---
 // THREE.HemisphereLight( skyColor, groundColor, intensity )
 // Using a dim grey for the room ambient, and a slightly brighter grey bouncing up from the floor
-const ambientBounce = new THREE.HemisphereLight(0x111111, 0x444444, 1)
+const ambientBounce = new THREE.HemisphereLight(0x111111, 0x444444, 0.5)
 scene.add(ambientBounce)
 
 // --- AMBIENT CONTROLS ---
