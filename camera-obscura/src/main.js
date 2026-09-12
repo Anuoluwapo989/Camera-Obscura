@@ -622,7 +622,7 @@ let isCameraMode = false
 
 // 1. Create a floating UI Button
 const modeButton = document.createElement('button')
-modeButton.innerText = '📷 ENTER CAMERA MODE'
+modeButton.innerText = '📷'
 modeButton.style.position = 'absolute'
 modeButton.style.top = '15px'
 modeButton.style.left = '15px'
