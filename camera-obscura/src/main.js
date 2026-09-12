@@ -155,6 +155,17 @@ scene.add(lightHelper)
 
 // Light Helper for fill light
 const fillLightHelper = new THREE.SpotLightHelper(fillLight)
+
+// --- SHADOW ACNE FIX ---
+// 1. Upgrade from the default 512x512 shadow map to a crisp 2K map
+fillLight.shadow.mapSize.width = 2048;
+fillLight.shadow.mapSize.height = 2048;
+
+// 2. Nudge the shadow math slightly beneath the surface to stop the parallel lines
+fillLight.shadow.bias = -0.0001;
+
+// 3. Smooth the shadow map calculations specifically along curved surfaces (like car fenders)
+fillLight.shadow.normalBias = 0.02;
 scene.add(fillLightHelper)
 
 
@@ -404,7 +415,7 @@ function createCycloramaGeometry() {
 
 const cycGeometry = createCycloramaGeometry()
 const cycMaterial = new THREE.MeshStandardMaterial({
-  color: 0x8a2020, 
+  color: 0x990a00, 
   roughness: 0.85, 
   metalness: 0.05,
   side: THREE.DoubleSide
@@ -680,7 +691,7 @@ const cycFolder = gui.addFolder('Cyclorama Backdrop')
 
 // Holds default cyc color
 const cycState = {
-  color: '#222222'
+  color: '#990a00'
 }
 
 cycFolder.addColor(cycState, 'color').name('Paper Color').onChange((val) => {
