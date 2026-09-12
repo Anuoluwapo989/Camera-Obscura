@@ -659,7 +659,7 @@ function toggleCameraMode() {
     cameraGui.hide()
     viewfinder.style.display = 'none'
 
-    modeButton.innerText = 'ENTER CAMERA MODE'
+    modeButton.innerText = '📷'
     modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
 
     lightHelper.visible = lightHelperToggle.showHelper
