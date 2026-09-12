@@ -558,6 +558,26 @@ bokehPass.uniforms.aperture.value = 1 / (lensState.fStop * 16.66)
 camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * lensState.focalLength)))
 camera.updateProjectionMatrix()
 
+// --- OPTICS ENGINE: DYNAMIC DEPTH OF FIELD --
+// I figured that I'd rather mathematically control the amount of bokeh in the backend
+function updateDepthOfField() {
+  // Calculate the physical aperture diameter in millimeters (f / N)
+  const physicalAperture = lensState.focalLength / lensState.fStop
+  
+  // Blur scales inversely with focus distance (closer focus = massive background blur)
+  const blurIntensity = (physicalAperture / lensState.focusDistance) * 0.0008
+
+  // Clamp the maximum WebGL blur radius to prevent GPU artifacting (0.0 to 0.04)
+  const dynamicMaxBlur = Math.max(0.00, Math.min(blurIntensity, 0.04))
+  
+  // Feed the calculated physics into the shader
+  bokehPass.uniforms.maxblur.value = dynamicMaxBlur
+}
+
+
+
+// Run it once on startup to set the baseline
+updateDepthOfField()
 
 // --- Camera Lens Controls ---
 const cameraFolder = cameraGui.addFolder('Lens Optics / Depth of Field')
@@ -567,23 +587,25 @@ cameraFolder.add(lensState, 'focalLength', 12, 200).name('Focal Length (mm)').on
   // Translate mm back into Three.js FOV degrees
   camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * val)));
   camera.updateProjectionMatrix();
-  updateHUD();
+  updateDepthOfField()
+  updateHUD()
 })
 
 // Focus Distance
 cameraFolder.add(lensState, 'focusDistance', 0.1, 20).name('Focus Distance (m)').onChange((val) => {
   bokehPass.uniforms.focus.value = val;
-  updateHUD();
+  updateDepthOfField()
+  updateHUD()
 }).listen()
 
 // Aperture (Real f-stops)
 cameraFolder.add(lensState, 'fStop', 1.2, 22).name('Aperture (f-stop)').onChange((val) => {
   // Translates the f-stop (e.g., 2.8) back into the microscopic decimal (e.g., 0.021) for WebGL
   bokehPass.uniforms.aperture.value = 1 / (val * 16.66);
-  updateHUD();
+  updateDepthOfField()
+  updateHUD()
 })
 
-cameraFolder.add(bokehPass.uniforms.maxblur, 'value', 0.0, 0.02).name('Max Blur Radius')
 
 cameraFolder.add(lensState, 'afGrid').name('DSLR AF Grid').onChange((val) => {
   afGrid.style.display = val ? 'block' : 'none'
@@ -593,39 +615,68 @@ cameraFolder.add(lensState, 'afGrid').name('DSLR AF Grid').onChange((val) => {
 cameraGui.add(cameraActions, 'takeSnapshot').name('TAKE PHOTO');
 
 
-
-// --- Application Controls ---
+// --- Application Controls & Mobile UI ---
 let isCameraMode = false
 
-window.addEventListener('keydown', (event) => {
-  if ((event.key === 'c' || event.key === 'C') && !isCameraMode) {
-    isCameraMode = true
+// 1. Create a floating UI Button
+const modeButton = document.createElement('button')
+modeButton.innerText = '📷 ENTER CAMERA MODE'
+modeButton.style.position = 'absolute'
+modeButton.style.top = '15px'
+modeButton.style.left = '15px'
+modeButton.style.padding = '10px 15px'
+modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
+modeButton.style.color = '#fff'
+modeButton.style.border = '1px solid #444'
+modeButton.style.borderRadius = '5px'
+modeButton.style.fontFamily = 'monospace'
+modeButton.style.cursor = 'pointer'
+modeButton.style.zIndex = '1000' // Keeps it on top of the canvas
+document.body.appendChild(modeButton)
+
+// 2. The universal toggle logic
+function toggleCameraMode() {
+  isCameraMode = !isCameraMode
+  
+  if (isCameraMode) {
     gui.hide()
     cameraGui.show()
     viewfinder.style.display = 'block'
-
+    
+    modeButton.innerText = '✖'
+    modeButton.style.backgroundColor = 'rgba(138, 32, 32, 0.8)' // Red tint
+    
     updateHUD()
 
-    // Hide all technical helpers when entering camera mode
     lightHelper.visible = false
     fillLightHelper.visible = false
     keySoftbox.visible = false
     fillSoftbox.visible = false
-
-  } else if (event.key === 'Escape' && isCameraMode) {
-    isCameraMode = false
+  } else {
     gui.show()
     cameraGui.hide()
     viewfinder.style.display = 'none'
+    
+    modeButton.innerText = 'ENTER CAMERA MODE'
+    modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
 
-    // Restore the visibility of technical helpers when exiting camera mode
     lightHelper.visible = lightHelperToggle.showHelper
     fillLightHelper.visible = fillLightHelperToggle.showHelper
     keySoftbox.visible = true
     fillSoftbox.visible = true
   }
-})
+}
 
+// 3. Bind it to BOTH the button click and the keyboard shortcuts
+modeButton.addEventListener('click', toggleCameraMode)
+
+window.addEventListener('keydown', (event) => {
+  if ((event.key === 'c' || event.key === 'C') && !isCameraMode) {
+    toggleCameraMode()
+  } else if (event.key === 'Escape' && isCameraMode) {
+    toggleCameraMode()
+  }
+})
 
 // Folder to keep UI organized
 const lightFolder = gui.addFolder('Key Light Setup')
@@ -802,8 +853,7 @@ focusBox.style.position = 'absolute'
 focusBox.style.width = '30px'
 focusBox.style.height = '30px'
 focusBox.style.border = '1px solid rgba(255, 255, 255, 0.8)'
-focusBox.style.transform = 'translate(-54%, -56%)' // Centers the box on the click coordinate
-// focusBox.style.borderRadius = '3px'
+focusBox.style.transform = 'translate(-54%, -56%)' // Centers the box on the click coordinate, found these number to look more centered than -50,-50
 focusBox.style.pointerEvents = 'none'
 focusBox.style.opacity = '0' // Hidden until you click
 focusBox.style.transition = 'border-color 0.1s, opacity 0.2s'
@@ -914,16 +964,31 @@ window.addEventListener('pointerup', (e) => {
 
   if (intersects.length > 0) {
     const hitPoint = intersects[0].point
-    const focusDist = camera.position.distanceTo(hitPoint)
+    
+    // --- Optical Planar Math ---
+    // 1. Get the direction the camera lens is physically pointing
+    const cameraDirection = new THREE.Vector3()
+    camera.getWorldDirection(cameraDirection)
+    
+    // 2. Draw a line from the camera to the clicked object
+    const hitVector = new THREE.Vector3().subVectors(hitPoint, camera.position)
+    
+    // 3. Project that line onto the camera's forward direction to get the exact flat focal plane distance
+    const focusDist = Math.abs(hitVector.dot(cameraDirection))
 
+    // Update state
     lensState.focusDistance = focusDist
     bokehPass.uniforms.focus.value = focusDist
+    
+    // Recalculate dynamic blur based on the accurate plane distance
+    updateDepthOfField() 
+    
     updateHUD()
 
     // AF CONFIRMATION: Flash sharp green
     setTimeout(() => { focusBox.style.borderColor = '#00ff00' }, 50)
   } else {
-    // AF FAILURE: Flash red if it fired outside the viewfinder
+    // AF FAILURE: Flash red if it fired into the infinite void
     setTimeout(() => { focusBox.style.borderColor = '#ff0000' }, 50)
   }
 
