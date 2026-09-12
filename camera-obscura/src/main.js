@@ -26,7 +26,7 @@ exrLoader.load('/studio.exr', (environmentMap) => {
   scene.environment = environmentMap
 
   // Global Multiplier for reflection brightness
-  scene.environmentIntensity = 0.5
+  scene.environmentIntensity = 1
 })
 // Setting up the camera position
 camera.position.set(0, 2, 5)
