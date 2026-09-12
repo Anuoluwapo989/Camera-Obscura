@@ -30,7 +30,7 @@ exrLoader.load('/studio.exr', (environmentMap) => {
   scene.environmentIntensity = 0.2
 })
 // Setting up the camera position
-camera.position.set(0, 2, 5)
+camera.position.set(0, 0, 5)
 
 const lightColors = {
   key: '#ffffff',
@@ -335,8 +335,7 @@ loader.load('model.glb', (gltf) => {
 
 // We're forming a J shape
 
-// --- THE 3-WALL CYCLORAMA ---
-// --- THE SEAMLESS STUDIO COVE ---
+// --- The Seamless Cyclrorama ---
 function createCycloramaGeometry() {
   // We start with a massive, high-resolution flat plane
   const planeWidth = 120 // Increased from 60 to push the side walls infinitely wide
@@ -375,6 +374,7 @@ function createCycloramaGeometry() {
       finalX = u
       finalY = -1
       finalZ = -v
+
     } else if (d <= radius) {
       // 2. Smooth Sweeping Cove (Floor to Wall & Wall to Wall)
       const theta = (d / radius) * (Math.PI / 2)
@@ -384,6 +384,7 @@ function createCycloramaGeometry() {
       finalX = uFlat + (dx / d) * travel
       finalY = -1 + height
       finalZ = -(vFlat + (dy / d) * travel)
+
     } else {
       // 3. Vertical Walls
       const height = radius + (d - radius)
