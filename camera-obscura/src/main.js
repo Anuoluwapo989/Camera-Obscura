@@ -1,0 +1,645 @@
+// Import Statements
+import * as THREE from 'three'
+import GUI from 'lil-gui'
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
+import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
+import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js'
+
+// Scene and Camera
+const scene = new THREE.Scene()
+scene.background = new THREE.Color('#1a1a1a')
+scene.fog = new THREE.Fog('#1a1a1a', 5, 25)
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
+
+// --- HDRI Environment (Global Reflections) ---
+const exrLoader = new EXRLoader()
+
+exrLoader.load('/studio.exr', (environmentMap) => {
+  // Wraps the flat image into a 360 degree sphere
+  environmentMap.mapping = THREE.EquirectangularReflectionMapping
+
+  // Makes all current and future models reflect it
+  scene.environment = environmentMap
+
+  // Global Multiplier for reflection brightness
+  scene.environmentIntensity = 0.5
+})
+// Setting up the camera position
+camera.position.set(0, 2, 5)
+
+const lightColors = {
+  key: '#ffffff',
+  fill: '#ffffff'
+}
+
+
+// --- GUI Controls ---
+// Initialize new GUI
+const gui = new GUI()
+
+const cameraGui = new GUI({ title: 'Camera Module' })
+cameraGui.hide() // Hide the camera GUI by default, but keep it accessible for future use
+
+// Canvas and Renderer
+const canvas = document.querySelector('#myCanvas');
+const renderer = new THREE.WebGLRenderer({ canvas: canvas, preserveDrawingBuffer: true, antialias: true })
+renderer.setSize(window.innerWidth, window.innerHeight)
+renderer.setPixelRatio(window.devicePixelRatio)
+renderer.shadowMap.enabled = true
+renderer.shadowMap.type = THREE.PCFShadowMap
+
+// --- GPU CONTEXT LOSS RECOVERY ---
+canvas.addEventListener('webglcontextlost', (event) => {
+  // Prevent the browser from permanently disabling the canvas
+  event.preventDefault()
+  console.error('CRITICAL! WebGL Context Lost. GPU disconnected ot crashed.')
+
+  // Fallback
+  window.location.reload()
+}, false)
+
+canvas.addEventListener('webglcontextrestored', () => {
+  console.log('WebGL Context Restored. Rebuilding graohics pipeline...')
+  renderer.setSize(window.innerWidth, window.innerHeight)
+  composer.setSize(window.innerWidth, window.innerHeight)
+}, false)
+
+// Post-processing (Lens Optics)
+const rendertarget = new THREE.WebGLRenderTarget(
+  window.innerWidth,
+  window.innerHeight,
+  { samples: 4 })
+const composer = new EffectComposer(renderer, rendertarget)
+
+// Draw the base 3D Scene
+const renderPass = new RenderPass(scene, camera)
+composer.addPass(renderPass)
+
+// Apply a bokeh effect to simulate depth of field
+const bokehPass = new BokehPass(scene, camera, {
+  focus: 4.5,
+  aperture: 0.000,
+  maxblur: 0.00,
+  width: window.innerWidth,
+  height: window.innerHeight
+})
+composer.addPass(bokehPass)
+
+// Output the final rendered image to the screen
+const outputPass = new OutputPass()
+composer.addPass(outputPass)
+
+// Orbit Controls
+const controls = new OrbitControls(camera, renderer.domElement)
+controls.enableDamping = true
+controls.dampingFactor = 0.05
+controls.screenSpacePanning = false
+
+// Stops the camera's vertical rotation to prevent it from going below the ground plane
+controls.maxPolarAngle = Math.PI / 2
+// Stops the camera's vertical rotation to prevent it from going above the subject
+controls.minPolarAngle = 0
+
+controls.maxDistance = 20; // Stops the camera from zooming out past 20 units
+controls.minDistance = 2;  // Stops the camera from zooming directly into the 3D model
+
+// --- 3D Objects ---
+
+// Initialize the GLTFLoader to load 3D models
+const loader = new GLTFLoader()
+
+// Global variable to hold the loaded subject
+let subject
+
+// --- 3D Uploader & Memory Manager ---
+
+// Create a hidden file input locked to modern 3D web formats
+const fileInput = document.createElement('input')
+fileInput.type = 'file'
+fileInput.accept = '.glb, .gltf'
+fileInput.style.display = 'none'
+document.body.appendChild(fileInput)
+
+// Memory Cleanup Function
+function disposeCurrentSubject() {
+  if (!subject) return
+
+  scene.remove(subject)
+
+  // Traverse the old model and delete data from GPU
+  subject.traverse((child) => {
+    if (child.isMesh) {
+      child.geometry.dispose()
+
+      // Delete Materials and Textures
+      if (child.material) {
+        if (Array.isArray(child.material)) {
+          child.material.forEach(mat => mat.dispose());
+        } else {
+          child.material.dispose()
+        }
+      }
+    }
+  })
+}
+
+// The File Parser
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0]
+  if (!file) return
+
+  // Read the file as binary data
+  const reader = new FileReader()
+  reader.onload = (e) => {
+    const arrayBuffer = e.target.result
+
+    // Parse the data into a Three.js scene
+    loader.parse(arrayBuffer,'', (gltf) => {
+
+      // Delete the old model to prevent crashes
+      disposeCurrentSubject()
+
+      // Assign the new model to the scene
+      subject = gltf.scene
+
+      // Re apply shadow and depth for the studio
+      subject.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true
+          child.receiveShadow = true
+        }
+
+        if (child.material) {
+          child.material.transparent = false
+          child.material.depthWrite = true
+        }
+      })
+
+
+      // Reset the scale and position to the center of the studio
+      subject.scale.set(11, 11, 11)
+      subject.position.set(0, -0.5, 0)
+
+      scene.add(subject)
+
+
+      // Point the lights back at the target
+      light.target = subject
+      fillLight.target = subject
+    })
+  }
+  reader.readAsArrayBuffer(file)
+
+  // Clear the input after loading
+  fileInput.value = ''
+})
+
+const modelActions = {
+  uploadModel: () => fileInput.click()
+}
+
+
+loader.load('model.glb', (gltf) => {
+  subject = gltf.scene
+
+  // Traverse the subject's children to enable shadows for all meshes
+  subject.traverse((child) => {
+    if (child.isMesh) {
+      child.castShadow = true
+      child.receiveShadow = true
+    }
+
+    if (child.material) {
+      child.material.transparent = false
+      child.material.depthWrite = true
+    }
+  })
+
+  // Scale and position the subject
+  subject.scale.set(11, 11, 11)
+  subject.position.set(0, -0.5, 0)
+
+  scene.add(subject)
+
+  // Update the light targets to point to the subject
+  light.target = subject
+  fillLight.target = subject
+
+
+  // Add GUI controls for scaling the 3D model
+  const modelFolder = gui.addFolder('3D Model Setup')
+
+  // 3D Model Upload Button
+  modelFolder.add(modelActions, 'uploadModel').name ('UPLOAD .GLB / .GLTF')
+
+  modelFolder.add(subject.scale, 'x', 0.1, 100).name('Scale Model').onChange((val) => {
+    subject.scale.set(val, val, val)
+  })
+
+  // Allows you to nudge the camera up or down until it touches the floor
+  modelFolder.add(subject.position, 'y', -5, 5).name('Height Offset');
+
+
+
+})
+
+
+// // Adding a sphere to the scene
+// const geometry = new THREE.SphereGeometry(1, 128, 128)
+// const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
+// const sphere = new THREE.Mesh(geometry, material)
+// scene.add(sphere)
+// sphere.castShadow = true;
+
+// Adding a plane to the scene
+const planeSize = 200
+const planeGeometry = new THREE.PlaneGeometry(planeSize, planeSize)
+const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 })
+const mesh = new THREE.Mesh(planeGeometry, planeMaterial)
+mesh.rotation.x = -Math.PI / 2
+mesh.position.y = -1
+scene.add(mesh)
+mesh.receiveShadow = true;
+
+// --- Lighting ---
+
+// Main Light
+const color = 0xFFFFFF
+const intensity = 164
+const light = new THREE.SpotLight(color, intensity)
+light.position.set(3, 4, 3)
+light.angle = Math.PI / 6
+light.penumbra = 0.5
+light.decay = 2
+light.castShadow = true;
+
+// --- SHADOW ACNE FIX ---
+// 1. Upgrade from the default 512x512 shadow map to a crisp 2K map
+light.shadow.mapSize.width = 2048; 
+light.shadow.mapSize.height = 2048;
+
+// 2. Nudge the shadow math slightly beneath the surface to stop the parallel lines
+light.shadow.bias = -0.0001; 
+
+// 3. Smooth the shadow map calculations specifically along curved surfaces (like car fenders)
+light.shadow.normalBias = 0.02; 
+// -----------------------
+
+scene.add(light)
+
+// Fill Light
+const fillLight = new THREE.SpotLight(0xFFFFFF, 226)
+fillLight.position.set(-3, 3, -3)
+fillLight.angle = Math.PI / 4
+fillLight.penumbra = 0.8
+fillLight.decay = 2
+scene.add(fillLight)
+
+// Light Helper for main light
+const lightHelper = new THREE.SpotLightHelper(light)
+scene.add(lightHelper)
+
+// Light Helper for fill light
+const fillLightHelper = new THREE.SpotLightHelper(fillLight)
+scene.add(fillLightHelper)
+
+
+// ---PRACTICAL SOFTBOXES---
+
+// Creating a reusable shape for the softboxes
+const softboxGeometry = new THREE.BoxGeometry(1, 1, 0.1)
+const keysoftboxMaterial = new THREE.MeshBasicMaterial({ color: lightColors.key })
+const fillsoftboxMaterial = new THREE.MeshBasicMaterial({ color: lightColors.fill })
+
+// Key Light Softbox
+const keySoftbox = new THREE.Mesh(softboxGeometry, keysoftboxMaterial)
+scene.add(keySoftbox)
+
+// Fill Light Softbox
+const fillSoftbox = new THREE.Mesh(softboxGeometry, fillsoftboxMaterial)
+scene.add(fillSoftbox)
+
+
+// --- A working Camera ---
+const cameraActions = {
+  takeSnapshot: () => {
+    const currentWidth = window.innerWidth
+    const currentHeight = window.innerHeight
+    const currentAspect = camera.aspect
+    const currentPixelRatio = renderer.getPixelRatio()
+
+    const exportWidth = 2400
+    const exportHeight = 3000
+
+    // Tempoarily force the 3D Engine to render at a higher resolution for the snapshot
+    camera.aspect = exportWidth / exportHeight
+    camera.updateProjectionMatrix()
+
+    renderer.setPixelRatio(1) // Reset pixel ratio to 1 for consistent export quality
+    renderer.setSize(exportWidth, exportHeight, false)
+
+    const exportRenderTarget = new THREE.WebGLRenderTarget(exportWidth, exportHeight, { samples: 0 })
+
+    const originalTarget = composer.renderTarget1
+    composer.reset(exportRenderTarget)
+    composer.setSize(exportWidth, exportHeight)
+
+
+    setTimeout(() => {
+      // Render the scene at the higher resolution
+      composer.render()
+
+      // Take the latest frame from the renderer and convert it to a data URL
+      const imageURL = renderer.domElement.toDataURL('image/png')
+
+      // Create a temporary link element to trigger the download
+      const link = document.createElement('a')
+      link.href = imageURL
+      link.download = 'studio-render-4K.png'
+
+      // Click the link to trigger the download
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      // Restore the original camera aspect ratio and renderer size
+      camera.aspect = currentAspect
+      camera.updateProjectionMatrix()
+      renderer.setPixelRatio(currentPixelRatio)
+      composer.setSize(currentWidth, currentHeight)
+      renderer.setSize(currentWidth, currentHeight)
+
+      composer.reset(originalTarget)
+      composer.setSize(currentWidth, currentHeight)
+
+      exportRenderTarget.dispose()
+
+    }, 150) // Delay to ensure the renderer has time to update before taking the snapshot
+  }
+}
+
+
+
+
+// --- Camera Lens Controls ---
+// const cameraFolder = cameraGui.addFolder('Lens Optics / Depth of Field')
+// cameraFolder.add(bokehPass.uniforms.focus, 'value', 0.0, 20).name('Focus Distance')
+// cameraFolder.add(bokehPass.uniforms.aperture, 'value', 0.0, 0.05).name('Aperture (f-stop)')
+// cameraFolder.add(bokehPass.uniforms.maxblur, 'value', 0.0, 0.02).name('Max Blur Radius')
+
+// // Add a button to the GUI for taking snapshots
+// cameraGui.add(cameraActions, 'takeSnapshot').name('Take Snapshot');
+
+// Default Lens Settings
+const lensState = {
+  fStop: 2.8,
+  focusDistance: 4.5,
+  focalLength: 25
+}
+
+// Match the shader settings with the settings we provide
+bokehPass.uniforms.focus.value = lensState.focusDistance
+bokehPass.uniforms.aperture.value = 1 / (lensState.fStop * 16.66)
+camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * lensState.focalLength)))
+camera.updateProjectionMatrix()
+
+
+// --- Camera Lens Controls ---
+const cameraFolder = cameraGui.addFolder('Lens Optics / Depth of Field')
+
+// Zoom Rocker
+cameraFolder.add(lensState, 'focalLength', 12, 200).name('Focal Length (mm)').onChange((val) => {
+  // Translate mm back into Three.js FOV degrees
+  camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * val)));
+  camera.updateProjectionMatrix();
+  updateHUD();
+})
+
+// Focus Distance
+cameraFolder.add(lensState, 'focusDistance', 0.1, 20).name('Focus Distance (m)').onChange((val) => {
+  bokehPass.uniforms.focus.value = val;
+  updateHUD();
+})
+
+// Aperture (Real f-stops)
+cameraFolder.add(lensState, 'fStop', 1.2, 22).name('Aperture (f-stop)').onChange((val) => {
+  // Translates the f-stop (e.g., 2.8) back into the microscopic decimal (e.g., 0.021) for WebGL
+  bokehPass.uniforms.aperture.value = 1 / (val * 16.66);
+  updateHUD();
+})
+
+cameraFolder.add(bokehPass.uniforms.maxblur, 'value', 0.0, 0.02).name('Max Blur Radius')
+
+// Add a button to the GUI for taking snapshots
+cameraGui.add(cameraActions, 'takeSnapshot').name('TAKE PHOTO');
+
+
+
+// --- Application Controls ---
+let isCameraMode = false
+
+window.addEventListener('keydown', (event) => {
+  if ((event.key === 'c' || event.key === 'C') && !isCameraMode) {
+    isCameraMode = true
+    gui.hide()
+    cameraGui.show()
+    viewfinder.style.display = 'block'
+
+    updateHUD()
+
+    // Hide all technical helpers when entering camera mode
+    lightHelper.visible = false
+    fillLightHelper.visible = false
+    keySoftbox.visible = false
+    fillSoftbox.visible = false
+
+  } else if (event.key === 'Escape' && isCameraMode) {
+    isCameraMode = false
+    gui.show()
+    cameraGui.hide()
+    viewfinder.style.display = 'none'
+
+    // Restore the visibility of technical helpers when exiting camera mode
+    lightHelper.visible = lightHelperToggle.showHelper
+    fillLightHelper.visible = fillLightHelperToggle.showHelper
+    keySoftbox.visible = true
+    fillSoftbox.visible = true
+  }
+})
+
+// Folder to keep UI organized
+const lightFolder = gui.addFolder('Key Light Setup')
+
+// Bind sliders to light position
+lightFolder.add(light.position, 'x', -10, 10).name('Position X').onChange(() => lightHelper.update())
+lightFolder.add(light.position, 'y', 0, 10).name('Position Y').onChange(() => lightHelper.update())
+lightFolder.add(light.position, 'z', -10, 10).name('Position Z').onChange(() => lightHelper.update())
+
+// Bind a slider to light intensity
+lightFolder.add(light, 'intensity', 0, 1000).name('Intensity')
+
+// Unified Key Light Color Picker
+lightFolder.addColor(lightColors, 'key').name('Gel Color').onChange((value) => {
+  light.color.set(value);
+  keysoftboxMaterial.color.set(value);
+  lightHelper.update();
+});
+
+// The Photography Controls
+lightFolder.add(light, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => lightHelper.update())
+lightFolder.add(light, 'penumbra', 0, 1).name('Penumbra').onChange(() => lightHelper.update())
+
+// Helper toggle for main light
+const lightHelperToggle = { showHelper: true }
+lightFolder.add(lightHelperToggle, 'showHelper').name('Show Key Light Helper').onChange((value) => {
+  lightHelper.visible = value
+})
+
+
+// Folders remain open by default for easy access to controls
+lightFolder.open()
+
+
+// Controls for the fill light
+const fillLightFolder = gui.addFolder('Fill Light Setup')
+
+// Bind sliders to fill light position
+fillLightFolder.add(fillLight.position, 'x', -10, 10).name('Position X').onChange(() => fillLightHelper.update())
+fillLightFolder.add(fillLight.position, 'y', 0, 10).name('Position Y').onChange(() => fillLightHelper.update())
+fillLightFolder.add(fillLight.position, 'z', -10, 10).name('Position Z').onChange(() => fillLightHelper.update())
+
+// Bind a slider to fill light intensity
+fillLightFolder.add(fillLight, 'intensity', 0, 1000).name('Intensity')
+
+// Helper toggle for fill light
+const fillLightHelperToggle = { showHelper: true }
+fillLightFolder.add(fillLightHelperToggle, 'showHelper').name('Show Fill Light Helper').onChange((value) => {
+  fillLightHelper.visible = value
+})
+
+// The Photography Controls
+fillLightFolder.add(fillLight, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => fillLightHelper.update())
+fillLightFolder.add(fillLight, 'penumbra', 0, 1).name('Penumbra').onChange(() => fillLightHelper.update())
+
+// Unified Fill Light Color Picker
+fillLightFolder.addColor(lightColors, 'fill').name('Gel Color').onChange((value) => {
+  fillLight.color.set(value);
+  fillsoftboxMaterial.color.set(value);
+  fillLightHelper.update();
+});
+
+// Folders kept closed by default to avoid cluttering the UI
+fillLightFolder.close()
+
+
+// --- SUBJECT MATERIAL CONTROLS ---
+
+// const materialFolder = gui.addFolder('Subject Surface')
+
+// materialFolder.add(material, 'roughness', 0, 1).name('Roughness')
+// materialFolder.add(material, 'metalness', 0, 1).name('Metalness')
+
+// --- AMBIENT BOUNCE LIGHT ---
+// THREE.HemisphereLight( skyColor, groundColor, intensity )
+// Using a dim grey for the room ambient, and a slightly brighter grey bouncing up from the floor
+const ambientBounce = new THREE.HemisphereLight(0x111111, 0x444444, 1)
+scene.add(ambientBounce)
+
+// --- AMBIENT CONTROLS ---
+const ambientFolder = gui.addFolder('Ambient / Floor Bounce');
+ambientFolder.add(ambientBounce, 'intensity', 0, 5).name('Bounce Intensity');
+ambientFolder.addColor({ sky: '#111111' }, 'sky').name('Sky Ambient').onChange((val) => ambientBounce.color.set(val));
+ambientFolder.addColor({ ground: '#444444' }, 'ground').name('Floor Bounce').onChange((val) => ambientBounce.groundColor.set(val));
+
+ambientFolder.add(scene, 'environmentIntensity', 0, 3).name('HDRI Reflection Strength')
+
+// Close the ambient folder by default to keep the UI clean
+ambientFolder.close()
+
+// --- Window Resize Handling ---
+window.addEventListener('resize', () => {
+  // Update the camera's aspect ratio and projection matrix to match the new window dimensions
+  camera.aspect = window.innerWidth / window.innerHeight
+  camera.updateProjectionMatrix()
+
+  // Update the renderer size and pixel ratio to match the new window dimensions
+  renderer.setSize(window.innerWidth, window.innerHeight)
+  composer.setSize(window.innerWidth, window.innerHeight)
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+})
+
+// --- Viewfinder Overlay ---
+const viewfinder = document.createElement('div')
+viewfinder.style.position = 'absolute'
+viewfinder.style.top = '50%'
+viewfinder.style.left = '50%'
+viewfinder.style.transform = 'translate(-50%, -50%)'
+
+// locks the frame to a 4:5 aspect ratio, which is the standard for portrait photography
+viewfinder.style.aspectRatio = '4 / 5'
+viewfinder.style.height = '85vh'
+
+// Darkens the area outside the viewfinder to help the user focus on the subject
+viewfinder.style.boxShadow = '0 0 0 9999px rgba(0, 0, 0, 0.75)'
+viewfinder.style.border = '2px solid rgba(255, 255, 255, 0.5)'
+
+// Rules of thirds grid overlay for better composition
+viewfinder.style.backgroundImage = `
+  linear-gradient(to right, transparent 33.3%, rgba(255,255,255,0.2) 33.3%, rgba(255,255,255,0.2) 33.5%, transparent 33.5%, transparent 66.6%, rgba(255,255,255,0.2) 66.6%, rgba(255,255,255,0.2) 66.8%, transparent 66.8%),
+  linear-gradient(to bottom, transparent 33.3%, rgba(255,255,255,0.2) 33.3%, rgba(255,255,255,0.2) 33.5%, transparent 33.5%, transparent 66.6%, rgba(255,255,255,0.2) 66.6%, rgba(255,255,255,0.2) 66.8%, transparent 66.8%)
+`
+viewfinder.style.pointerEvents = 'none'
+viewfinder.style.display = 'none' // Hide the viewfinder by default; it will be shown when entering camera mode
+document.body.appendChild(viewfinder)
+
+// --- HUD ---
+const hud = document.createElement('div')
+hud.style.position = 'absolute'
+hud.style.bottom = '15px'
+hud.style.left = '50%'
+hud.style.transform = 'translateX(-50%)'
+hud.style.color = '#00ff00' // Green for the text like a DSLR
+hud.style.fontFamily = "'CustomDigitalFont', monospace";
+hud.style.fontSize = '20px'
+hud.style.letterSpacing = '2px'
+// hud.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)'
+viewfinder.appendChild(hud)
+
+function updateHUD() {
+  // 1. Read directly from the proxy state
+  const focalLength = Math.round(lensState.focalLength);
+  const fStop = lensState.fStop.toFixed(1);
+  const focusDist = lensState.focusDistance.toFixed(1);
+
+  // 2. Inject the text directly into the HTML HUD element
+  hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${focusDist}m`;
+}
+
+// Rendering the scene
+function animate(time) {
+  controls.update()
+
+  if (!isCameraMode) {
+    lightHelper.update()
+    fillLightHelper.update()
+
+
+    // Snap the softbox positions to the lights
+    keySoftbox.position.copy(light.position)
+    keySoftbox.lookAt(light.target.position)
+
+    fillSoftbox.position.copy(fillLight.position)
+    fillSoftbox.lookAt(fillLight.target.position)
+
+    renderer.render(scene, camera)
+  } else {
+    composer.render()
+  }
+}
+
+
+renderer.setAnimationLoop(animate)
