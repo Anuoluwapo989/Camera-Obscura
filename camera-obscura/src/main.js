@@ -102,9 +102,9 @@ controls.screenSpacePanning = false
 
 // VERTICAL LOCKS (Y-Axis)
 // Prevents camera from dipping below the floor (with a 0.05 buffer to prevent clipping)
-controls.maxPolarAngle = Math.PI / 2 - 0.05 
+controls.maxPolarAngle = Math.PI / 2 - 0.05
 // Prevents camera from going perfectly top-down and flipping the axis
-controls.minPolarAngle = 0.1 
+controls.minPolarAngle = 0.1
 
 // HORIZONTAL LOCKS (X/Z-Axis)
 // Clamps the left/right orbit so you can never swing outside the 3 walls
@@ -391,7 +391,7 @@ function createCycloramaGeometry() {
       const theta = (d / radius) * (Math.PI / 2)
       const travel = radius * Math.sin(theta)
       const height = radius * (1 - Math.cos(theta))
-      
+
       finalX = uFlat + (dx / d) * travel
       finalY = -1 + height
       finalZ = -(vFlat + (dy / d) * travel)
@@ -400,7 +400,7 @@ function createCycloramaGeometry() {
       // 3. Vertical Walls
       const height = radius + (d - radius)
       const travel = radius
-      
+
       finalX = uFlat + (dx / d) * travel
       finalY = -1 + height
       finalZ = -(vFlat + (dy / d) * travel)
@@ -415,8 +415,8 @@ function createCycloramaGeometry() {
 
 const cycGeometry = createCycloramaGeometry()
 const cycMaterial = new THREE.MeshStandardMaterial({
-  color: 0x990a00, 
-  roughness: 0.85, 
+  color: 0x990a00,
+  roughness: 0.85,
   metalness: 0.05,
   side: THREE.DoubleSide
 })
@@ -548,7 +548,8 @@ const cameraActions = {
 const lensState = {
   fStop: 2.8,
   focusDistance: 4.5,
-  focalLength: 25
+  focalLength: 25,
+  afGrid: false
 }
 
 // Match the shader settings with the settings we provide
@@ -573,7 +574,7 @@ cameraFolder.add(lensState, 'focalLength', 12, 200).name('Focal Length (mm)').on
 cameraFolder.add(lensState, 'focusDistance', 0.1, 20).name('Focus Distance (m)').onChange((val) => {
   bokehPass.uniforms.focus.value = val;
   updateHUD();
-})
+}).listen()
 
 // Aperture (Real f-stops)
 cameraFolder.add(lensState, 'fStop', 1.2, 22).name('Aperture (f-stop)').onChange((val) => {
@@ -583,6 +584,10 @@ cameraFolder.add(lensState, 'fStop', 1.2, 22).name('Aperture (f-stop)').onChange
 })
 
 cameraFolder.add(bokehPass.uniforms.maxblur, 'value', 0.0, 0.02).name('Max Blur Radius')
+
+cameraFolder.add(lensState, 'afGrid').name('DSLR AF Grid').onChange((val) => {
+  afGrid.style.display = val ? 'block' : 'none'
+})
 
 // Add a button to the GUI for taking snapshots
 cameraGui.add(cameraActions, 'takeSnapshot').name('TAKE PHOTO');
@@ -789,6 +794,145 @@ function updateHUD() {
   // 2. Inject the text directly into the HTML HUD element
   hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${focusDist}m`;
 }
+
+// --- AUTOFOCUS HUD INTERFACE ---
+// The Active Focus Box (Hollow Rectangle)
+const focusBox = document.createElement('div')
+focusBox.style.position = 'absolute'
+focusBox.style.width = '30px'
+focusBox.style.height = '30px'
+focusBox.style.border = '1px solid rgba(255, 255, 255, 0.8)'
+focusBox.style.transform = 'translate(-54%, -56%)' // Centers the box on the click coordinate
+// focusBox.style.borderRadius = '3px'
+focusBox.style.pointerEvents = 'none'
+focusBox.style.opacity = '0' // Hidden until you click
+focusBox.style.transition = 'border-color 0.1s, opacity 0.2s'
+viewfinder.appendChild(focusBox)
+
+// The DSLR Multi-Point Grid Container
+const afGrid = document.createElement('div')
+afGrid.style.position = 'absolute'
+afGrid.style.width = '100%'
+afGrid.style.height = '100%'
+afGrid.style.pointerEvents = 'none'
+afGrid.style.display = 'none' // Hidden by default, toggled via GUI
+viewfinder.appendChild(afGrid)
+
+// Generate the 15-point diamond layout
+const afPointOffsets = [
+  [0, 0], // Center
+  [-10, 0], [-20, 0], [-30, 0], // Left side
+  [10, 0], [20, 0], [30, 0],    // Right side
+  [-10, -12], [0, -12], [10, -12], // Top Mid Row
+  [-10, 12], [0, 12], [10, 12],    // Bottom Mid Row
+  [0, -24], // Top Far
+  [0, 24]   // Bottom Far
+]
+
+// Draws the static LCD dots
+afPointOffsets.forEach(offset => {
+  const pt = document.createElement('div')
+  pt.style.position = 'absolute'
+  pt.style.width = '6px'
+  pt.style.height = '6px'
+  pt.style.border = '1px solid rgba(20, 20, 20, 0.9)' // Dark inner border
+  pt.style.outline = '1px solid rgba(255, 255, 255, 0.6)' // Bright outer border
+  pt.style.left = `calc(50% + ${offset[0]}%)`
+  pt.style.top = `calc(50% + ${offset[1]}%)`
+  pt.style.transform = 'translate(-50%, -50%)'
+  afGrid.appendChild(pt)
+})
+
+
+// Raycaster: Click-To-Focus in the camera module
+const raycaster = new THREE.Raycaster()
+const mouse = new THREE.Vector2()
+let mouseDownPos = new THREE.Vector2()
+
+// Record where the mouse clicks down on
+window.addEventListener('pointerdown', (e) => {
+  mouseDownPos.set(e.clientX, e.clientY)
+})
+
+// Trigger focus on release of mouse
+// Avoids drag from being rergistered as a click or tap
+window.addEventListener('pointerup', (e) => {
+
+  // Calculates the length of the hypotenuse betwen the distance travelled by the mouse in the X and Y plane
+  // If > 5 pixels, they are orbiting, not clicking
+  const distance = Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y)
+  if (distance > 5) return
+
+  // You can only rack focus while looking through the viewfinder
+  if (!isCameraMode) return
+
+  const vfRect = viewfinder.getBoundingClientRect()
+
+  // Real cameras don't focus if you click outside the physical frame
+  if (e.clientX < vfRect.left || e.clientX > vfRect.right ||
+    e.clientY < vfRect.top || e.clientY > vfRect.bottom) return
+
+  let targetPixelX = e.clientX
+  let targetPixelY = e.clientY
+
+  // If the Grid is ON, mathematically snap the click to the nearest AF dot
+  if (lensState.afGrid) {
+    const clickPctX = ((e.clientX - (vfRect.left + vfRect.width / 2)) / vfRect.width) * 100
+    const clickPctY = ((e.clientY - (vfRect.top + vfRect.height / 2)) / vfRect.height) * 100
+
+    let nearestPoint = afPointOffsets[0]
+    let minDist = Infinity
+
+    afPointOffsets.forEach(pt => {
+      const dist = Math.hypot(pt[0] - clickPctX, pt[1] - clickPctY)
+      if (dist < minDist) {
+        minDist = dist
+        nearestPoint = pt
+      }
+    })
+
+    // Convert the snapped percentage back to exact screen pixels for the Raycaster
+    targetPixelX = vfRect.left + vfRect.width / 2 + (nearestPoint[0] * vfRect.width / 100)
+    targetPixelY = vfRect.top + vfRect.height / 2 + (nearestPoint[1] * vfRect.height / 100)
+  }
+
+  //Move the visual HUD box to the target
+  const boxX = targetPixelX - vfRect.left
+  const boxY = targetPixelY - vfRect.top
+  focusBox.style.left = `${boxX}px`
+  focusBox.style.top = `${boxY}px`
+  focusBox.style.opacity = '1'
+  focusBox.style.borderColor = 'rgba(255, 255, 255, 0.8)' // Reset to white initially
+
+  //Fire the Raycaster
+  mouse.x = (targetPixelX / window.innerWidth) * 2 - 1
+  mouse.y = -(targetPixelY / window.innerHeight) * 2 + 1
+  raycaster.setFromCamera(mouse, camera)
+
+  const objectsToTest = subject ? [subject, cyclorama] : [cyclorama]
+  const intersects = raycaster.intersectObjects(objectsToTest, true)
+
+  if (intersects.length > 0) {
+    const hitPoint = intersects[0].point
+    const focusDist = camera.position.distanceTo(hitPoint)
+
+    lensState.focusDistance = focusDist
+    bokehPass.uniforms.focus.value = focusDist
+    updateHUD()
+
+    // AF CONFIRMATION: Flash sharp green
+    setTimeout(() => { focusBox.style.borderColor = '#00ff00' }, 50)
+  } else {
+    // AF FAILURE: Flash red if it fired outside the viewfinder
+    setTimeout(() => { focusBox.style.borderColor = '#ff0000' }, 50)
+  }
+
+  // Fade the box back out after 1.5 seconds like a real LCD
+  clearTimeout(focusBox.timeout)
+  focusBox.timeout = setTimeout(() => {
+    focusBox.style.opacity = '0'
+  }, 1500)
+})
 
 // Rendering the scene
 function animate(time) {
