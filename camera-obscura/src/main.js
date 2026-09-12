@@ -9,7 +9,8 @@ import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js'
 
-import { SpeedInsights } from "@vercel/speed-insights/next"
+import { inject } from '@vercel/speed-insights'
+inject()
 
 // Scene and Camera
 const scene = new THREE.Scene()
