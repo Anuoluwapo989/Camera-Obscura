@@ -54,6 +54,11 @@ renderer.setPixelRatio(window.devicePixelRatio)
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFShadowMap
 
+// --- SENSOR OPTICS ---
+// Processes raw 3D light using the ACES Filmic color science standard
+renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.toneMappingExposure = 1.0 // Base exposure, which we will dynamically control
+
 // --- GPU CONTEXT LOSS RECOVERY ---
 canvas.addEventListener('webglcontextlost', (event) => {
   // Prevent the browser from permanently disabling the canvas
@@ -571,10 +576,12 @@ const cameraActions = {
 
 // Default Lens Settings
 const lensState = {
-  fStop: 2.8,
+  fStop: 2.8, // Aperture
   focusDistance: 4.5,
   focalLength: 25,
-  afGrid: false
+  afGrid: false,
+  iso: 400,          // Base ISO
+  shutterSpeed: 0.01 // Base Shutter Speed (1/100th of a second)
 }
 
 // Match the shader settings with the settings we provide
@@ -599,10 +606,24 @@ function updateDepthOfField() {
   bokehPass.uniforms.maxblur.value = dynamicMaxBlur
 }
 
-
-
 // Run it once on startup to set the baseline
 updateDepthOfField()
+
+
+// --- OPTICS ENGINE: EXPOSURE TRIANGLE ---
+function updateExposure() {
+  // The physical formula for light gathered by a sensor: (ISO/100) * ShutterSpeed / Aperture^2
+  // We multiply by 196 as our base calibration constant so that 
+  // f/2.8, 1/100s, at ISO 400 produces a perfectly balanced exposure of 1.0
+  const lightGathered = (lensState.iso / 100) * lensState.shutterSpeed / Math.pow(lensState.fStop, 2)
+  renderer.toneMappingExposure = lightGathered * 196
+}
+
+// Run it once on startup
+updateExposure()
+
+
+
 
 // --- Camera Lens Controls ---
 const cameraFolder = cameraGui.addFolder('Lens Optics / Depth of Field')
@@ -628,9 +649,27 @@ cameraFolder.add(lensState, 'fStop', 1.2, 22).name('Aperture (f-stop)').onChange
   // Translates the f-stop (e.g., 2.8) back into the microscopic decimal (e.g., 0.021) for WebGL
   bokehPass.uniforms.aperture.value = 1 / (val * 16.66);
   updateDepthOfField()
+  updateExposure()
   updateHUD()
 })
 
+// Shutter Speed (Dropdown Menu)
+const shutterSpeeds = {
+  '1/8000': 1/8000, '1/4000': 1/4000, '1/2000': 1/2000, '1/1000': 1/1000,
+  '1/500': 1/500, '1/250': 1/250, '1/125': 1/125, '1/100': 1/100, '1/60': 1/60,
+  '1/30': 1/30, '1/15': 1/15, '1/8': 1/8, '1/4': 1/4, '1/2': 1/2, '1"': 1
+}
+
+cameraFolder.add(lensState, 'shutterSpeed', shutterSpeeds).name('Shutter Speed').onChange(() => {
+  updateExposure()
+  updateHUD()
+})
+
+// ISO (Standard Stops)
+cameraFolder.add(lensState, 'iso', [100, 200, 400, 800, 1600, 3200, 6400]).name('ISO').onChange(() => {
+  updateExposure()
+  updateHUD()
+})
 
 cameraFolder.add(lensState, 'afGrid').name('DSLR AF Grid').onChange((val) => {
   afGrid.style.display = val ? 'block' : 'none'
@@ -911,13 +950,17 @@ hud.style.letterSpacing = '2px'
 viewfinder.appendChild(hud)
 
 function updateHUD() {
-  // 1. Read directly from the proxy state
+  // Read directly from the proxy state
   const focalLength = Math.round(lensState.focalLength);
   const fStop = lensState.fStop.toFixed(1);
   const focusDist = lensState.focusDistance.toFixed(1);
 
-  // 2. Inject the text directly into the HTML HUD element
-  hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${focusDist}m`;
+  // Format the shutter speed for the display
+  const ssDisplay = lensState.shutterSpeed >= 1 ? '1"' : `1/${Math.round(1 / lensState.shutterSpeed)}`
+
+  // Inject the expanded readout into the HUD
+  hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso} &nbsp;|&nbsp; ${focusDist}m`
+
 }
 
 // --- AUTOFOCUS HUD INTERFACE ---
