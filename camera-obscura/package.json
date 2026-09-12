@@ -12,6 +12,7 @@
     "vite": "^8.2.2"
   },
   "dependencies": {
+    "@vercel/speed-insights": "^2.0.0",
     "lil-gui": "^0.21.0",
     "three": "^0.186.0"
   }

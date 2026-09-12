@@ -9,6 +9,8 @@ import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js'
 
+import { SpeedInsights } from "@vercel/speed-insights/next"
+
 // Scene and Camera
 const scene = new THREE.Scene()
 scene.background = new THREE.Color('#1a1a1a')
