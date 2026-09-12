@@ -76,6 +76,8 @@ const rendertarget = new THREE.WebGLRenderTarget(
   { samples: 4 })
 const composer = new EffectComposer(renderer, rendertarget)
 
+composer.setPixelRatio(window.devicePixelRatio)
+
 // Draw the base 3D Scene
 const renderPass = new RenderPass(scene, camera)
 composer.addPass(renderPass)
@@ -563,13 +565,13 @@ camera.updateProjectionMatrix()
 function updateDepthOfField() {
   // Calculate the physical aperture diameter in millimeters (f / N)
   const physicalAperture = lensState.focalLength / lensState.fStop
-  
+
   // Blur scales inversely with focus distance (closer focus = massive background blur)
   const blurIntensity = (physicalAperture / lensState.focusDistance) * 0.0008
 
   // Clamp the maximum WebGL blur radius to prevent GPU artifacting (0.0 to 0.04)
   const dynamicMaxBlur = Math.max(0.00, Math.min(blurIntensity, 0.04))
-  
+
   // Feed the calculated physics into the shader
   bokehPass.uniforms.maxblur.value = dynamicMaxBlur
 }
@@ -637,15 +639,15 @@ document.body.appendChild(modeButton)
 // 2. The universal toggle logic
 function toggleCameraMode() {
   isCameraMode = !isCameraMode
-  
+
   if (isCameraMode) {
     gui.hide()
     cameraGui.show()
     viewfinder.style.display = 'block'
-    
+
     modeButton.innerText = '✖'
     modeButton.style.backgroundColor = 'rgba(138, 32, 32, 0.8)' // Red tint
-    
+
     updateHUD()
 
     lightHelper.visible = false
@@ -656,7 +658,7 @@ function toggleCameraMode() {
     gui.show()
     cameraGui.hide()
     viewfinder.style.display = 'none'
-    
+
     modeButton.innerText = 'ENTER CAMERA MODE'
     modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
 
@@ -796,7 +798,11 @@ window.addEventListener('resize', () => {
   // Update the renderer size and pixel ratio to match the new window dimensions
   renderer.setSize(window.innerWidth, window.innerHeight)
   composer.setSize(window.innerWidth, window.innerHeight)
+
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  renderer.setPixelRatio(pixelRatio)
+
+  composer.setPixelRatio(pixelRatio)
 })
 
 // --- Viewfinder Overlay ---
@@ -964,25 +970,25 @@ window.addEventListener('pointerup', (e) => {
 
   if (intersects.length > 0) {
     const hitPoint = intersects[0].point
-    
+
     // --- Optical Planar Math ---
     // 1. Get the direction the camera lens is physically pointing
     const cameraDirection = new THREE.Vector3()
     camera.getWorldDirection(cameraDirection)
-    
+
     // 2. Draw a line from the camera to the clicked object
     const hitVector = new THREE.Vector3().subVectors(hitPoint, camera.position)
-    
+
     // 3. Project that line onto the camera's forward direction to get the exact flat focal plane distance
     const focusDist = Math.abs(hitVector.dot(cameraDirection))
 
     // Update state
     lensState.focusDistance = focusDist
     bokehPass.uniforms.focus.value = focusDist
-    
+
     // Recalculate dynamic blur based on the accurate plane distance
-    updateDepthOfField() 
-    
+    updateDepthOfField()
+
     updateHUD()
 
     // AF CONFIRMATION: Flash sharp green
