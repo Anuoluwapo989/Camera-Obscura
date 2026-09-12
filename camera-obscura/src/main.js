@@ -34,7 +34,8 @@ camera.position.set(0, 0, 5)
 
 const lightColors = {
   key: '#ffffff',
-  fill: '#ffffff'
+  fill: '#ffffff',
+  rim: '#ffffff'
 }
 
 
@@ -130,16 +131,15 @@ light.decay = 2
 light.castShadow = true;
 
 // --- SHADOW ACNE FIX ---
-// 1. Upgrade from the default 512x512 shadow map to a crisp 2K map
+// Upgrade from the default 512x512 shadow map to a crisp 2K map
 light.shadow.mapSize.width = 2048;
 light.shadow.mapSize.height = 2048;
 
-// 2. Nudge the shadow math slightly beneath the surface to stop the parallel lines
+// Nudge the shadow math slightly beneath the surface to stop the parallel lines
 light.shadow.bias = -0.0001;
 
-// 3. Smooth the shadow map calculations specifically along curved surfaces (like car fenders)
+// Smooth the shadow map calculations specifically along curved surfaces (like car fenders)
 light.shadow.normalBias = 0.02;
-// -----------------------
 
 scene.add(light)
 
@@ -158,17 +158,34 @@ scene.add(lightHelper)
 // Light Helper for fill light
 const fillLightHelper = new THREE.SpotLightHelper(fillLight)
 
-// --- SHADOW ACNE FIX ---
-// 1. Upgrade from the default 512x512 shadow map to a crisp 2K map
+// Shadow Acne & Resolution Fix
 fillLight.shadow.mapSize.width = 2048;
 fillLight.shadow.mapSize.height = 2048;
-
-// 2. Nudge the shadow math slightly beneath the surface to stop the parallel lines
 fillLight.shadow.bias = -0.0001;
-
-// 3. Smooth the shadow map calculations specifically along curved surfaces (like car fenders)
 fillLight.shadow.normalBias = 0.02;
+
 scene.add(fillLightHelper)
+
+
+
+// --- Rim Light (Kicker / Hair Light) ---
+const rimLight = new THREE.SpotLight(0xFFFFFF, 350)
+rimLight.position.set(0, 5, -6)
+rimLight.angle = Math / 5
+rimLight.penumbra = 0.5
+rimLight.decay = 2
+rimLight.castShadow = true
+
+// Shadow Acne & Resolution Fix
+rimLight.shadow.mapSize.width = 2048;
+rimLight.shadow.mapSize.height = 2048;
+rimLight.shadow.bias = -0.0001;
+rimLight.shadow.normalBias = 0.02;
+scene.add(rimLight)
+
+const rimLightHelper = new THREE.SpotLightHelper(rimLight)
+
+scene.add(rimLightHelper)
 
 
 // ---PRACTICAL SOFTBOXES---
@@ -185,6 +202,11 @@ scene.add(keySoftbox)
 // Fill Light Softbox
 const fillSoftbox = new THREE.Mesh(softboxGeometry, fillsoftboxMaterial)
 scene.add(fillSoftbox)
+
+// Rim Light Softbox
+const rimSoftboxMaterial = new THREE.MeshBasicMaterial({ color: lightColors.rim })
+const rimSoftbox = new THREE.Mesh(softboxGeometry, rimSoftboxMaterial)
+scene.add(rimSoftbox)
 
 // --- 3D Objects ---
 
@@ -269,6 +291,7 @@ fileInput.addEventListener('change', (e) => {
       // Point the lights back at the target
       light.target = subject
       fillLight.target = subject
+      rimLight.target = subject
     })
   }
   reader.readAsArrayBuffer(file)
@@ -652,8 +675,11 @@ function toggleCameraMode() {
 
     lightHelper.visible = false
     fillLightHelper.visible = false
+    rimSoftbox.visible = false
+
     keySoftbox.visible = false
     fillSoftbox.visible = false
+    rimSoftbox.visible = false
   } else {
     gui.show()
     cameraGui.hide()
@@ -666,6 +692,7 @@ function toggleCameraMode() {
     fillLightHelper.visible = fillLightHelperToggle.showHelper
     keySoftbox.visible = true
     fillSoftbox.visible = true
+    rimSoftbox.visible = true
   }
 }
 
@@ -743,6 +770,47 @@ fillLightFolder.addColor(lightColors, 'fill').name('Gel Color').onChange((value)
 
 // Folders kept closed by default to avoid cluttering the UI
 fillLightFolder.close()
+
+
+
+// --- Rim Light GUI ---
+const rimLightFolder = gui.addFolder('Rim / Hair Light Setup')
+rimLightFolder.add(rimLight.position, 'x', -10, 10).name('Position X').onChange(() => rimLightHelper.update())
+rimLightFolder.add(rimLight.position, 'y', 0, 15).name('Position Y').onChange(() => rimLightHelper.update())
+rimLightFolder.add(rimLight.position, 'z', -15, 10).name('Position Z').onChange(() => rimLightHelper.update())
+rimLightFolder.add(rimLight, 'intensity', 0, 1000).name('Intensity')
+rimLightFolder.add(rimLight, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => rimLightHelper.update())
+rimLightFolder.add(rimLight, 'penumbra', 0, 1).name('Penumbra').onChange(() => rimLightHelper.update())
+
+rimLightFolder.addColor(lightColors, 'rim').name('Gel Color').onChange((value) => {
+  rimLight.color.set(value);
+  rimSoftboxMaterial.color.set(value);
+  rimLightHelper.update();
+});
+
+const rimLightHelperToggle = { showHelper: true }
+rimLightFolder.add(rimLightHelperToggle, 'showHelper').name('Show Helper').onChange((val) => rimLightHelper.visible = val)
+rimLightFolder.close()
+
+// --- Turntable GUI ---
+const turntableState = {
+  rotation: 0,
+  autoSpin: false,
+  speed: 0.5
+}
+
+const turntableFolder = gui.addFolder('Subject Turntable')
+// Modifying the proxy state instead of the raw subject preserves the UI when uploading new files
+turntableFolder.add(turntableState, 'rotation', 0, 360).name('Manual Angle').onChange((val) => {
+  if (subject && !turntableState.autoSpin) {
+    subject.rotation.y = THREE.MathUtils.degToRad(val)
+  }
+}).listen()
+turntableFolder.add(turntableState, 'autoSpin').name('Motorized Spin')
+turntableFolder.add(turntableState, 'speed', 0.1, 5).name('Spin Speed')
+turntableFolder.open()
+
+
 
 // --- Cyclorama GUI Controls ---
 const cycFolder = gui.addFolder('Cyclorama Backdrop')
@@ -1009,6 +1077,12 @@ window.addEventListener('pointerup', (e) => {
 function animate(time) {
   controls.update()
 
+  if (turntableState.autoSpin && subject) {
+    turntableState.rotation += turntableState.speed
+    if (turntableState.rotation >= 360) turntableState.rotation = 0
+    subject.rotation.y = THREE.MathUtils.degToRad(turntableState.rotation)
+  }
+
   if (!isCameraMode) {
     lightHelper.update()
     fillLightHelper.update()
@@ -1020,6 +1094,9 @@ function animate(time) {
 
     fillSoftbox.position.copy(fillLight.position)
     fillSoftbox.lookAt(fillLight.target.position)
+
+    rimSoftbox.position.copy(rimLight.position)
+    rimSoftbox.lookAt(rimLight.target.position)
 
     renderer.render(scene, camera)
   } else {
