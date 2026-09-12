@@ -8,11 +8,12 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js'
+import { depth, roughness } from 'three/src/nodes/TSL.js'
 
 // Scene and Camera
 const scene = new THREE.Scene()
-scene.background = new THREE.Color('#1a1a1a')
-scene.fog = new THREE.Fog('#1a1a1a', 5, 25)
+scene.background = new THREE.Color('#0f0f0f')
+scene.fog = new THREE.Fog('#0f0f0f', 25, 70)
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
 
 // --- HDRI Environment (Global Reflections) ---
@@ -99,13 +100,78 @@ controls.enableDamping = true
 controls.dampingFactor = 0.05
 controls.screenSpacePanning = false
 
-// Stops the camera's vertical rotation to prevent it from going below the ground plane
-controls.maxPolarAngle = Math.PI / 2
-// Stops the camera's vertical rotation to prevent it from going above the subject
-controls.minPolarAngle = 0
+// VERTICAL LOCKS (Y-Axis)
+// Prevents camera from dipping below the floor (with a 0.05 buffer to prevent clipping)
+controls.maxPolarAngle = Math.PI / 2 - 0.05 
+// Prevents camera from going perfectly top-down and flipping the axis
+controls.minPolarAngle = 0.1 
 
-controls.maxDistance = 20; // Stops the camera from zooming out past 20 units
-controls.minDistance = 2;  // Stops the camera from zooming directly into the 3D model
+// HORIZONTAL LOCKS (X/Z-Axis)
+// Clamps the left/right orbit so you can never swing outside the 3 walls
+controls.minAzimuthAngle = -Math.PI / 2.5 // Left wall limit
+controls.maxAzimuthAngle = Math.PI / 2.5  // Right wall limit
+
+// ZOOM LOCKS
+controls.maxDistance = 14; // Prevents zooming backwards out of the studio walls
+controls.minDistance = 2;  // Prevents zooming directly through the 3D model
+
+// --- Lighting ---
+
+// Main Light
+const color = 0xFFFFFF
+const intensity = 164
+const light = new THREE.SpotLight(color, intensity)
+light.position.set(3, 4, 3)
+light.angle = Math.PI / 6
+light.penumbra = 0.5
+light.decay = 2
+light.castShadow = true;
+
+// --- SHADOW ACNE FIX ---
+// 1. Upgrade from the default 512x512 shadow map to a crisp 2K map
+light.shadow.mapSize.width = 2048;
+light.shadow.mapSize.height = 2048;
+
+// 2. Nudge the shadow math slightly beneath the surface to stop the parallel lines
+light.shadow.bias = -0.0001;
+
+// 3. Smooth the shadow map calculations specifically along curved surfaces (like car fenders)
+light.shadow.normalBias = 0.02;
+// -----------------------
+
+scene.add(light)
+
+// Fill Light
+const fillLight = new THREE.SpotLight(0xFFFFFF, 226)
+fillLight.position.set(-3, 3, -3)
+fillLight.angle = Math.PI / 4
+fillLight.penumbra = 0.8
+fillLight.decay = 2
+scene.add(fillLight)
+
+// Light Helper for main light
+const lightHelper = new THREE.SpotLightHelper(light)
+scene.add(lightHelper)
+
+// Light Helper for fill light
+const fillLightHelper = new THREE.SpotLightHelper(fillLight)
+scene.add(fillLightHelper)
+
+
+// ---PRACTICAL SOFTBOXES---
+
+// Creating a reusable shape for the softboxes
+const softboxGeometry = new THREE.BoxGeometry(1, 1, 0.1)
+const keysoftboxMaterial = new THREE.MeshBasicMaterial({ color: lightColors.key })
+const fillsoftboxMaterial = new THREE.MeshBasicMaterial({ color: lightColors.fill })
+
+// Key Light Softbox
+const keySoftbox = new THREE.Mesh(softboxGeometry, keysoftboxMaterial)
+scene.add(keySoftbox)
+
+// Fill Light Softbox
+const fillSoftbox = new THREE.Mesh(softboxGeometry, fillsoftboxMaterial)
+scene.add(fillSoftbox)
 
 // --- 3D Objects ---
 
@@ -158,7 +224,7 @@ fileInput.addEventListener('change', (e) => {
     const arrayBuffer = e.target.result
 
     // Parse the data into a Three.js scene
-    loader.parse(arrayBuffer,'', (gltf) => {
+    loader.parse(arrayBuffer, '', (gltf) => {
 
       // Delete the old model to prevent crashes
       disposeCurrentSubject()
@@ -234,7 +300,7 @@ loader.load('model.glb', (gltf) => {
   const modelFolder = gui.addFolder('3D Model Setup')
 
   // 3D Model Upload Button
-  modelFolder.add(modelActions, 'uploadModel').name ('UPLOAD .GLB / .GLTF')
+  modelFolder.add(modelActions, 'uploadModel').name('UPLOAD .GLB / .GLTF')
 
   modelFolder.add(subject.scale, 'x', 0.1, 100).name('Scale Model').onChange((val) => {
     subject.scale.set(val, val, val)
@@ -256,72 +322,144 @@ loader.load('model.glb', (gltf) => {
 // sphere.castShadow = true;
 
 // Adding a plane to the scene
-const planeSize = 200
-const planeGeometry = new THREE.PlaneGeometry(planeSize, planeSize)
-const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 })
-const mesh = new THREE.Mesh(planeGeometry, planeMaterial)
-mesh.rotation.x = -Math.PI / 2
-mesh.position.y = -1
-scene.add(mesh)
-mesh.receiveShadow = true;
+// const planeSize = 200
+// const planeGeometry = new THREE.PlaneGeometry(planeSize, planeSize)
+// const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 })
+// const mesh = new THREE.Mesh(planeGeometry, planeMaterial)
+// mesh.rotation.x = -Math.PI / 2
+// mesh.position.y = -1
+// scene.add(mesh)
+// mesh.receiveShadow = true;
 
-// --- Lighting ---
+// --- Changing the plane into a Cyclorama (Cyc Wall) ---
 
-// Main Light
-const color = 0xFFFFFF
-const intensity = 164
-const light = new THREE.SpotLight(color, intensity)
-light.position.set(3, 4, 3)
-light.angle = Math.PI / 6
-light.penumbra = 0.5
-light.decay = 2
-light.castShadow = true;
+// We're forming a J shape
 
-// --- SHADOW ACNE FIX ---
-// 1. Upgrade from the default 512x512 shadow map to a crisp 2K map
-light.shadow.mapSize.width = 2048; 
-light.shadow.mapSize.height = 2048;
+// --- THE 3-WALL CYCLORAMA ---
+// --- THE SEAMLESS STUDIO COVE ---
+function createCycloramaGeometry() {
+  // We start with a massive, high-resolution flat plane
+  const planeWidth = 120 // Increased from 60 to push the side walls infinitely wide
+  const planeDepth = 80  // Increased from 40 to push the back wall infinitely high
+  const geo = new THREE.PlaneGeometry(planeWidth, planeDepth, 128, 128)
+  const pos = geo.attributes.position
 
-// 2. Nudge the shadow math slightly beneath the surface to stop the parallel lines
-light.shadow.bias = -0.0001; 
+  const floorHalfWidth = 14 // Flat floor extends 14 units left and right
+  const floorBack = 6       // Flat floor extends 6 units back from origin
+  const radius = 6          // Smoothness of the corner fillet
 
-// 3. Smooth the shadow map calculations specifically along curved surfaces (like car fenders)
-light.shadow.normalBias = 0.02; 
-// -----------------------
+  for (let i = 0; i < pos.count; i++) {
+    const u = pos.getX(i)
+    const v = pos.getY(i)
 
-scene.add(light)
+    // Calculate distance from the flat floor boundary
+    let dx = 0
+    let dy = 0
 
-// Fill Light
-const fillLight = new THREE.SpotLight(0xFFFFFF, 226)
-fillLight.position.set(-3, 3, -3)
-fillLight.angle = Math.PI / 4
-fillLight.penumbra = 0.8
-fillLight.decay = 2
-scene.add(fillLight)
+    if (u > floorHalfWidth) dx = u - floorHalfWidth
+    else if (u < -floorHalfWidth) dx = u + floorHalfWidth
 
-// Light Helper for main light
-const lightHelper = new THREE.SpotLightHelper(light)
-scene.add(lightHelper)
+    if (v > floorBack) dy = v - floorBack // Only curve the back wall, not the front
 
-// Light Helper for fill light
-const fillLightHelper = new THREE.SpotLightHelper(fillLight)
-scene.add(fillLightHelper)
+    // Euclidean distance from the boundary (This is what rounds the corners)
+    const d = Math.sqrt(dx * dx + dy * dy)
+
+    // The closest point on the flat boundary
+    const uFlat = u - dx
+    const vFlat = v - dy
+
+    let finalX, finalY, finalZ
+
+    if (d === 0) {
+      // 1. Flat Floor
+      finalX = u
+      finalY = -1
+      finalZ = -v
+    } else if (d <= radius) {
+      // 2. Smooth Sweeping Cove (Floor to Wall & Wall to Wall)
+      const theta = (d / radius) * (Math.PI / 2)
+      const travel = radius * Math.sin(theta)
+      const height = radius * (1 - Math.cos(theta))
+      
+      finalX = uFlat + (dx / d) * travel
+      finalY = -1 + height
+      finalZ = -(vFlat + (dy / d) * travel)
+    } else {
+      // 3. Vertical Walls
+      const height = radius + (d - radius)
+      const travel = radius
+      
+      finalX = uFlat + (dx / d) * travel
+      finalY = -1 + height
+      finalZ = -(vFlat + (dy / d) * travel)
+    }
+
+    pos.setXYZ(i, finalX, finalY, finalZ)
+  }
+
+  geo.computeVertexNormals()
+  return geo
+}
+
+const cycGeometry = createCycloramaGeometry()
+const cycMaterial = new THREE.MeshStandardMaterial({
+  color: 0x8a2020, 
+  roughness: 0.85, 
+  metalness: 0.05,
+  side: THREE.DoubleSide
+})
+
+const cyclorama = new THREE.Mesh(cycGeometry, cycMaterial)
+cyclorama.receiveShadow = true
+scene.add(cyclorama)
+
+// const cycGeometry = createCycloramaGeometry()
+// const cycMaterial = new THREE.MeshStandardMaterial({
+//   color: 0x8a2020, // Rich studio paper base
+//   roughness: 0.85,  // Matte paper finish
+//   metalness: 0.05,
+//   side: THREE.DoubleSide
+// })
+
+// const cyclorama = new THREE.Mesh(cycGeometry, cycMaterial)
+// cyclorama.position.set(0, 0, 0)
+// cyclorama.receiveShadow = true
+// scene.add(cyclorama)
+
+// // The 2D profile of the backdrop
+// const sweepProfile = new THREE.Shape()
+// sweepProfile.moveTo(0, 20) // The point at the top of the J
+// sweepProfile.lineTo(0, 2) // Drawing the stem of the J
+// sweepProfile.quadraticCurveTo(0, 0, 2, 0) // Drawing the smooth J Curve
+// sweepProfile.lineTo(30, 0) // The flat floor
+
+// // Extrude settings for the extrusion
+// const extrudeSettings = {
+//   steps: 1,
+//   depth: 40,
+//   bevelEnabled: false,
+//   curveSegments: 64 // High res so the curve gradients are smooth
+// }
+
+// const cycGeometry = new THREE.ExtrudeGeometry(sweepProfile, extrudeSettings)
+
+// // The finish of the cyc
+// const cycMaterial = new THREE.MeshStandardMaterial({
+//   color: 0x222222,
+//   roughness: 0.9, // Matte
+//   metalness: 0.0
+// })
+
+// const cyclorama = new THREE.Mesh(cycGeometry, cycMaterial)
+// cyclorama.receiveShadow = true
+
+// // Positioning the cyc behind the subject
+// cyclorama.rotation.y = -Math.PI / 2
+// cyclorama.position.set(20, -1, -5)
+
+// scene.add(cyclorama)
 
 
-// ---PRACTICAL SOFTBOXES---
-
-// Creating a reusable shape for the softboxes
-const softboxGeometry = new THREE.BoxGeometry(1, 1, 0.1)
-const keysoftboxMaterial = new THREE.MeshBasicMaterial({ color: lightColors.key })
-const fillsoftboxMaterial = new THREE.MeshBasicMaterial({ color: lightColors.fill })
-
-// Key Light Softbox
-const keySoftbox = new THREE.Mesh(softboxGeometry, keysoftboxMaterial)
-scene.add(keySoftbox)
-
-// Fill Light Softbox
-const fillSoftbox = new THREE.Mesh(softboxGeometry, fillsoftboxMaterial)
-scene.add(fillSoftbox)
 
 
 // --- A working Camera ---
@@ -471,6 +609,7 @@ window.addEventListener('keydown', (event) => {
   }
 })
 
+
 // Folder to keep UI organized
 const lightFolder = gui.addFolder('Key Light Setup')
 
@@ -535,7 +674,27 @@ fillLightFolder.addColor(lightColors, 'fill').name('Gel Color').onChange((value)
 // Folders kept closed by default to avoid cluttering the UI
 fillLightFolder.close()
 
+// --- Cyclorama GUI Controls ---
+const cycFolder = gui.addFolder('Cyclorama Backdrop')
 
+// Holds default cyc color
+const cycState = {
+  color: '#222222'
+}
+
+cycFolder.addColor(cycState, 'color').name('Paper Color').onChange((val) => {
+  // Updates the seamless color based on user input
+  cycMaterial.color.set(val)
+
+  // // By matching the background and fog, it appears to be infinite
+  // scene.background.set(val)
+  // scene.fog.color.set(val)
+})
+
+cycFolder.add(cycMaterial, 'roughness', 0, 1).name('Surface Roughness')
+cycFolder.add(cycMaterial, 'metalness', 0, 1).name('Surface Reflection')
+
+cycFolder.open()
 // --- SUBJECT MATERIAL CONTROLS ---
 
 // const materialFolder = gui.addFolder('Subject Surface')
