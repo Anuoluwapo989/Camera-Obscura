@@ -508,10 +508,8 @@ scene.add(cyclorama)
 
 
 // --- A working Camera ---
-
 const cameraActions = {
   takeSnapshot: () => {
-    // 1. Physically pause the main animation loop so it doesn't interfere
     renderer.setAnimationLoop(null)
 
     const currentWidth = window.innerWidth
@@ -519,47 +517,42 @@ const cameraActions = {
     const currentAspect = camera.aspect
     const currentPixelRatio = renderer.getPixelRatio()
 
-    const exportWidth = 2400
-    const exportHeight = 3000
+    // Dynamically cap export size for mobile GPUs to prevent memory crashes
+    const isMobile = window.innerWidth < 768
+    const exportWidth = isMobile ? currentWidth * 2 : 2400
+    const exportHeight = isMobile ? currentHeight * 2 : 3000
 
-    // Temporarily force the 3D Engine to render at a higher resolution
     camera.aspect = exportWidth / exportHeight
     camera.updateProjectionMatrix()
 
     renderer.setPixelRatio(1)
     renderer.setSize(exportWidth, exportHeight, false)
-
-    const exportRenderTarget = new THREE.WebGLRenderTarget(exportWidth, exportHeight, { samples: 0 })
-    const originalTarget = composer.renderTarget1
-    
-    composer.reset(exportRenderTarget)
     composer.setSize(exportWidth, exportHeight)
 
-    // 2. Render synchronously and immediately read the pixels
-    composer.render()
-    const imageURL = renderer.domElement.toDataURL('image/png')
+    // CRITICAL FIX: Give the mobile GPU 100ms to allocate the new canvas size before taking the picture
+    setTimeout(() => {
+      // Render directly to the canvas buffer
+      composer.render()
+      
+      // Read the physical canvas
+      const imageURL = renderer.domElement.toDataURL('image/png', 1.0)
 
-    // 3. Trigger download
-    const link = document.createElement('a')
-    link.href = imageURL
-    link.download = 'studio-render-4K.png'
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
+      const link = document.createElement('a')
+      link.href = imageURL
+      link.download = 'studio-render.png'
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
 
-    // 4. Restore original state
-    camera.aspect = currentAspect
-    camera.updateProjectionMatrix()
-    renderer.setPixelRatio(currentPixelRatio)
-    composer.setSize(currentWidth, currentHeight)
-    renderer.setSize(currentWidth, currentHeight)
+      // Restore state
+      camera.aspect = currentAspect
+      camera.updateProjectionMatrix()
+      renderer.setPixelRatio(currentPixelRatio)
+      renderer.setSize(currentWidth, currentHeight)
+      composer.setSize(currentWidth, currentHeight)
 
-    composer.reset(originalTarget)
-    composer.setSize(currentWidth, currentHeight)
-    exportRenderTarget.dispose()
-
-    // 5. Resume the animation loop instantly
-    renderer.setAnimationLoop(animate)
+      renderer.setAnimationLoop(animate)
+    }, 100)
   }
 }
 
@@ -782,21 +775,7 @@ updateExposure()
 // --- Application Controls & Mobile UI ---
 let isCameraMode = false
 
-// 1. Create a floating UI Button
-const modeButton = document.createElement('button')
-modeButton.innerText = '📷'
-modeButton.style.position = 'absolute'
-modeButton.style.top = '15px'
-modeButton.style.left = '15px'
-modeButton.style.padding = '10px 15px'
-modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
-modeButton.style.color = '#ffffff'
-modeButton.style.border = '1px solid #444'
-modeButton.style.borderRadius = '5px'
-modeButton.style.fontFamily = 'monospace'
-modeButton.style.cursor = 'pointer'
-modeButton.style.zIndex = '1000' // Keeps it on top of the canvas
-document.body.appendChild(modeButton)
+
 
 
 // --- CUSTOM GLASSMORPHISM STUDIO UI ---
@@ -870,21 +849,6 @@ document.body.insertAdjacentHTML('beforeend', studioUIHTML)
 
 const studioSidebar = document.getElementById('studio-sidebar')
 
-// --- SIDEBAR TOGGLE LOGIC ---
-const toggleBtnHTML = `<div id="sidebar-toggle" class="sidebar-toggle"><img src = '/settings.svg' width = 40%></div>`
-document.body.insertAdjacentHTML('beforeend', toggleBtnHTML)
-
-const sidebarToggle = document.getElementById('sidebar-toggle')
-
-// Start closed on mobile, open on desktop
-let isSidebarOpen = window.innerWidth >= 768 
-studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
-
-sidebarToggle.addEventListener('click', () => {
-  isSidebarOpen = !isSidebarOpen
-  studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
-})
-
 // --- TAB LOGIC ---
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
@@ -908,6 +872,10 @@ document.getElementById('ui-auto-spin').addEventListener('change', (e) => turnta
 document.getElementById('ui-spin-speed').addEventListener('input', (e) => turntableState.speed = parseFloat(e.target.value))
 
 // Lighting
+const lightHelperToggle = { showHelper: true }
+const fillLightHelperToggle = { showHelper: true }
+const rimLightHelperToggle = { showHelper: true }
+
 document.getElementById('ui-key-int').addEventListener('input', (e) => light.intensity = e.target.value)
 document.getElementById('ui-key-color').addEventListener('input', (e) => { light.color.set(e.target.value); keysoftboxMaterial.color.set(e.target.value) })
 document.getElementById('ui-key-help').addEventListener('change', (e) => lightHelperToggle.showHelper = e.target.checked)
@@ -926,17 +894,39 @@ document.getElementById('ui-cyc-rough').addEventListener('input', (e) => cycMate
 document.getElementById('ui-amb-int').addEventListener('input', (e) => ambientBounce.intensity = e.target.value)
 document.getElementById('ui-hdri-int').addEventListener('input', (e) => scene.environmentIntensity = e.target.value)
 
+
+// --- UNIFIED UI TOGGLES ---
+const uiTogglesHTML = `
+  <div id="camera-toggle" class="glass-btn">📷</div>
+  <div id="sidebar-toggle" class="glass-btn"><img src='/settings.svg' style="width: 50%; opacity: 0.8;"></div>
+`
+document.body.insertAdjacentHTML('beforeend', uiTogglesHTML)
+
+const cameraToggle = document.getElementById('camera-toggle')
+const sidebarToggle = document.getElementById('sidebar-toggle')
+
+// Sidebar visibility state
+let isSidebarOpen = window.innerWidth >= 768 
+studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
+
+sidebarToggle.addEventListener('click', () => {
+  isSidebarOpen = !isSidebarOpen
+  studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
+})
+
+
 // The universal toggle logic
 function toggleCameraMode() {
   isCameraMode = !isCameraMode
   if (isCameraMode) {
-    // gui.hide()
-    glassDeck.style.display = 'flex' // Reveal the custom glass UI
+    glassDeck.style.display = 'flex'
     studioSidebar.style.display = 'none'
+    sidebarToggle.style.display = 'none' // Hide the settings gear
     viewfinder.style.display = 'block'
     
-    modeButton.innerText = '✖'
-    modeButton.style.backgroundColor = 'rgba(138, 32, 32, 0.8)'
+    // Update circular button to active exit state
+    cameraToggle.innerText = '✖'
+    cameraToggle.classList.add('active')
     
     updateHUD()
 
@@ -947,13 +937,14 @@ function toggleCameraMode() {
     fillSoftbox.visible = false
     rimSoftbox.visible = false
   } else {
-    // gui.show()
-    glassDeck.style.display = 'none' // Hide the custom glass UI
-    studioSidebar.style.display = 'block'
+    glassDeck.style.display = 'none'
+    sidebarToggle.style.display = 'flex' // Restore settings gear
+    studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
     viewfinder.style.display = 'none'
     
-    modeButton.innerText = '📷'
-    modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
+    // Restore normal camera button
+    cameraToggle.innerText = '📷'
+    cameraToggle.classList.remove('active')
 
     lightHelper.visible = lightHelperToggle.showHelper
     fillLightHelper.visible = fillLightHelperToggle.showHelper
@@ -964,8 +955,16 @@ function toggleCameraMode() {
   }
 }
 
-// 3. Bind it to BOTH the button click and the keyboard shortcuts
-modeButton.addEventListener('click', toggleCameraMode)
+// Bind to the new button
+cameraToggle.addEventListener('click', toggleCameraMode)
+
+window.addEventListener('keydown', (event) => {
+  if ((event.key === 'c' || event.key === 'C') && !isCameraMode) {
+    toggleCameraMode()
+  } else if (event.key === 'Escape' && isCameraMode) {
+    toggleCameraMode()
+  }
+})
 
 window.addEventListener('keydown', (event) => {
   if ((event.key === 'c' || event.key === 'C') && !isCameraMode) {
