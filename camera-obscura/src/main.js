@@ -1,6 +1,7 @@
 // Import Statements
+
 import * as THREE from 'three'
-import GUI from 'lil-gui'
+// import GUI from 'lil-gui'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
@@ -41,10 +42,10 @@ const lightColors = {
 
 // --- GUI Controls ---
 // Initialize new GUI
-const gui = new GUI()
+// const gui = new GUI()
 
-const cameraGui = new GUI({ title: 'Camera Module' })
-cameraGui.hide() // Hide the camera GUI by default, but keep it accessible for future use
+// const cameraGui = new GUI({ title: 'Camera Module' })
+// cameraGui.hide() // Hide the camera GUI by default, but keep it accessible for future use
 
 // Canvas and Renderer
 const canvas = document.querySelector('#myCanvas');
@@ -176,7 +177,7 @@ scene.add(fillLightHelper)
 // --- Rim Light (Kicker / Hair Light) ---
 const rimLight = new THREE.SpotLight(0xFFFFFF, 350)
 rimLight.position.set(0, 5, -6)
-rimLight.angle = Math / 5
+rimLight.angle = Math.PI / 5
 rimLight.penumbra = 0.5
 rimLight.decay = 2
 rimLight.castShadow = true
@@ -336,23 +337,24 @@ loader.load('model.glb', (gltf) => {
   light.target = subject
   fillLight.target = subject
 
+})
 
   // Add GUI controls for scaling the 3D model
-  const modelFolder = gui.addFolder('3D Model Setup')
+//   const modelFolder = gui.addFolder('3D Model Setup')
 
-  // 3D Model Upload Button
-  modelFolder.add(modelActions, 'uploadModel').name('UPLOAD .GLB / .GLTF')
+//   // 3D Model Upload Button
+//   modelFolder.add(modelActions, 'uploadModel').name('UPLOAD .GLB / .GLTF')
 
-  modelFolder.add(subject.scale, 'x', 0.1, 100).name('Scale Model').onChange((val) => {
-    subject.scale.set(val, val, val)
-  })
+//   modelFolder.add(subject.scale, 'x', 0.1, 100).name('Scale Model').onChange((val) => {
+//     subject.scale.set(val, val, val)
+//   })
 
-  // Allows you to nudge the camera up or down until it touches the floor
-  modelFolder.add(subject.position, 'y', -5, 5).name('Height Offset');
+//   // Allows you to nudge the camera up or down until it touches the floor
+//   modelFolder.add(subject.position, 'y', -5, 5).name('Height Offset');
 
 
 
-})
+// })
 
 
 // // Adding a sphere to the scene
@@ -584,6 +586,105 @@ const lensState = {
   shutterSpeed: 0.01 // Base Shutter Speed (1/100th of a second)
 }
 
+// --- CUSTOM GLASSMORPHISM CAMERA UI ---
+const glassUIHTML = `
+  <div id="camera-glass-ui" class="camera-glass-deck">
+    <div class="lens-controls">
+      <div class="control-row">
+        <label>Zoom</label>
+        <input type="range" id="ui-focal" min="12" max="200" value="${lensState.focalLength}" step="1">
+      </div>
+      <div class="control-row">
+        <label>Aperture</label>
+        <input type="range" id="ui-aperture" min="1.2" max="22" value="${lensState.fStop}" step="0.1">
+      </div>
+      <div class="control-row">
+        <select id="ui-shutter">
+          <option value="0.000125">1/8000</option>
+          <option value="0.00025">1/4000</option>
+          <option value="0.0005">1/2000</option>
+          <option value="0.001">1/1000</option>
+          <option value="0.002">1/500</option>
+          <option value="0.004">1/250</option>
+          <option value="0.008">1/125</option>
+          <option value="0.01" selected>1/100</option>
+          <option value="0.0166">1/60</option>
+          <option value="0.0333">1/30</option>
+          <option value="0.0666">1/15</option>
+          <option value="0.125">1/8</option>
+          <option value="0.25">1/4</option>
+          <option value="0.5">1/2</option>
+          <option value="1">1"</option>
+        </select>
+        <select id="ui-iso">
+          <option value="100">ISO 100</option>
+          <option value="200">ISO 200</option>
+          <option value="400" selected>ISO 400</option>
+          <option value="800">ISO 800</option>
+          <option value="1600">ISO 1600</option>
+          <option value="3200">ISO 3200</option>
+          <option value="6400">ISO 6400</option>
+        </select>
+        <div class="toggle-row">
+          <input type="checkbox" id="ui-af" ${lensState.afGrid ? 'checked' : ''}> AF Grid
+        </div>
+      </div>
+    </div>
+    <div id="ui-shutter-btn" class="shutter-btn">
+      <div class="shutter-inner"></div>
+    </div>
+  </div>
+`
+document.body.insertAdjacentHTML('beforeend', glassUIHTML)
+
+// Define the DOM elements
+const glassDeck = document.getElementById('camera-glass-ui')
+const uiFocal = document.getElementById('ui-focal')
+const uiAperture = document.getElementById('ui-aperture')
+const uiShutter = document.getElementById('ui-shutter')
+const uiIso = document.getElementById('ui-iso')
+const uiAf = document.getElementById('ui-af')
+const uiShutterBtn = document.getElementById('ui-shutter-btn')
+
+// Wire the inputs to the Three.js physics engine
+uiFocal.addEventListener('input', (e) => {
+  const val = parseFloat(e.target.value)
+  lensState.focalLength = val
+  camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * val)))
+  camera.updateProjectionMatrix()
+  updateDepthOfField()
+  updateHUD()
+})
+
+uiAperture.addEventListener('input', (e) => {
+  const val = parseFloat(e.target.value)
+  lensState.fStop = val
+  bokehPass.uniforms.aperture.value = 1 / (val * 16.66)
+  updateDepthOfField()
+  updateExposure()
+  updateHUD()
+})
+
+uiShutter.addEventListener('change', (e) => {
+  lensState.shutterSpeed = parseFloat(e.target.value)
+  updateExposure()
+  updateHUD()
+})
+
+uiIso.addEventListener('change', (e) => {
+  lensState.iso = parseFloat(e.target.value)
+  updateExposure()
+  updateHUD()
+})
+
+uiAf.addEventListener('change', (e) => {
+  lensState.afGrid = e.target.checked
+  afGrid.style.display = lensState.afGrid ? 'block' : 'none'
+})
+
+// Bind the circular shutter button to the hi-res snapshot function
+uiShutterBtn.addEventListener('click', cameraActions.takeSnapshot)
+
 // Match the shader settings with the settings we provide
 bokehPass.uniforms.focus.value = lensState.focusDistance
 bokehPass.uniforms.aperture.value = 1 / (lensState.fStop * 16.66)
@@ -626,57 +727,57 @@ updateExposure()
 
 
 // --- Camera Lens Controls ---
-const cameraFolder = cameraGui.addFolder('Lens Optics / Depth of Field')
+// const cameraFolder = cameraGui.addFolder('Lens Optics / Depth of Field')
 
-// Zoom Rocker
-cameraFolder.add(lensState, 'focalLength', 12, 200).name('Focal Length (mm)').onChange((val) => {
-  // Translate mm back into Three.js FOV degrees
-  camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * val)));
-  camera.updateProjectionMatrix();
-  updateDepthOfField()
-  updateHUD()
-})
+// // Zoom Rocker
+// cameraFolder.add(lensState, 'focalLength', 12, 200).name('Focal Length (mm)').onChange((val) => {
+//   // Translate mm back into Three.js FOV degrees
+//   camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * val)));
+//   camera.updateProjectionMatrix();
+//   updateDepthOfField()
+//   updateHUD()
+// })
 
-// Focus Distance
-cameraFolder.add(lensState, 'focusDistance', 0.1, 20).name('Focus Distance (m)').onChange((val) => {
-  bokehPass.uniforms.focus.value = val;
-  updateDepthOfField()
-  updateHUD()
-}).listen()
+// // Focus Distance
+// cameraFolder.add(lensState, 'focusDistance', 0.1, 20).name('Focus Distance (m)').onChange((val) => {
+//   bokehPass.uniforms.focus.value = val;
+//   updateDepthOfField()
+//   updateHUD()
+// }).listen()
 
-// Aperture (Real f-stops)
-cameraFolder.add(lensState, 'fStop', 1.2, 22).name('Aperture (f-stop)').onChange((val) => {
-  // Translates the f-stop (e.g., 2.8) back into the microscopic decimal (e.g., 0.021) for WebGL
-  bokehPass.uniforms.aperture.value = 1 / (val * 16.66);
-  updateDepthOfField()
-  updateExposure()
-  updateHUD()
-})
+// // Aperture (Real f-stops)
+// cameraFolder.add(lensState, 'fStop', 1.2, 22).name('Aperture (f-stop)').onChange((val) => {
+//   // Translates the f-stop (e.g., 2.8) back into the microscopic decimal (e.g., 0.021) for WebGL
+//   bokehPass.uniforms.aperture.value = 1 / (val * 16.66);
+//   updateDepthOfField()
+//   updateExposure()
+//   updateHUD()
+// })
 
-// Shutter Speed (Dropdown Menu)
-const shutterSpeeds = {
-  '1/8000': 1/8000, '1/4000': 1/4000, '1/2000': 1/2000, '1/1000': 1/1000,
-  '1/500': 1/500, '1/250': 1/250, '1/125': 1/125, '1/100': 1/100, '1/60': 1/60,
-  '1/30': 1/30, '1/15': 1/15, '1/8': 1/8, '1/4': 1/4, '1/2': 1/2, '1"': 1
-}
+// // Shutter Speed (Dropdown Menu)
+// const shutterSpeeds = {
+//   '1/8000': 1/8000, '1/4000': 1/4000, '1/2000': 1/2000, '1/1000': 1/1000,
+//   '1/500': 1/500, '1/250': 1/250, '1/125': 1/125, '1/100': 1/100, '1/60': 1/60,
+//   '1/30': 1/30, '1/15': 1/15, '1/8': 1/8, '1/4': 1/4, '1/2': 1/2, '1"': 1
+// }
 
-cameraFolder.add(lensState, 'shutterSpeed', shutterSpeeds).name('Shutter Speed').onChange(() => {
-  updateExposure()
-  updateHUD()
-})
+// cameraFolder.add(lensState, 'shutterSpeed', shutterSpeeds).name('Shutter Speed').onChange(() => {
+//   updateExposure()
+//   updateHUD()
+// })
 
-// ISO (Standard Stops)
-cameraFolder.add(lensState, 'iso', [100, 200, 400, 800, 1600, 3200, 6400]).name('ISO').onChange(() => {
-  updateExposure()
-  updateHUD()
-})
+// // ISO (Standard Stops)
+// cameraFolder.add(lensState, 'iso', [100, 200, 400, 800, 1600, 3200, 6400]).name('ISO').onChange(() => {
+//   updateExposure()
+//   updateHUD()
+// })
 
-cameraFolder.add(lensState, 'afGrid').name('DSLR AF Grid').onChange((val) => {
-  afGrid.style.display = val ? 'block' : 'none'
-})
+// cameraFolder.add(lensState, 'afGrid').name('DSLR AF Grid').onChange((val) => {
+//   afGrid.style.display = val ? 'block' : 'none'
+// })
 
-// Add a button to the GUI for taking snapshots
-cameraGui.add(cameraActions, 'takeSnapshot').name('TAKE PHOTO');
+// // Add a button to the GUI for taking snapshots
+// cameraGui.add(cameraActions, 'takeSnapshot').name('TAKE PHOTO');
 
 
 // --- Application Controls & Mobile UI ---
@@ -690,7 +791,7 @@ modeButton.style.top = '15px'
 modeButton.style.left = '15px'
 modeButton.style.padding = '10px 15px'
 modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
-modeButton.style.color = '#fff'
+modeButton.style.color = '#ffffff'
 modeButton.style.border = '1px solid #444'
 modeButton.style.borderRadius = '5px'
 modeButton.style.fontFamily = 'monospace'
@@ -698,37 +799,151 @@ modeButton.style.cursor = 'pointer'
 modeButton.style.zIndex = '1000' // Keeps it on top of the canvas
 document.body.appendChild(modeButton)
 
-// 2. The universal toggle logic
+
+// --- CUSTOM GLASSMORPHISM STUDIO UI ---
+const studioUIHTML = `
+  <div id="studio-sidebar" class="studio-sidebar">
+    <div class="tabs">
+      <button class="tab-btn active" data-tab="tab-subject">SUBJECT</button>
+      <button class="tab-btn" data-tab="tab-lighting">LIGHTING</button>
+      <button class="tab-btn" data-tab="tab-stage">STAGE</button>
+    </div>
+    
+    <!-- SUBJECT TAB -->
+    <div id="tab-subject" class="tab-content active">
+      <div class="upload-btn" id="ui-upload">UPLOAD .GLB / .GLTF</div>
+      
+      <div class="control-group">
+        <h3>Transform</h3>
+        <div class="control-row"><label>Scale</label><input type="range" id="ui-scale" min="0.1" max="100" value="11" step="0.1"></div>
+        <div class="control-row"><label>Height</label><input type="range" id="ui-height" min="-5" max="5" value="-0.5" step="0.1"></div>
+      </div>
+      
+      <div class="control-group">
+        <h3>Turntable</h3>
+        <div class="control-row"><label>Angle</label><input type="range" id="ui-spin-angle" min="0" max="360" value="0"></div>
+        <div class="control-row"><label>Speed</label><input type="range" id="ui-spin-speed" min="0.1" max="5" value="0.5" step="0.1"></div>
+        <div class="toggle-row"><input type="checkbox" id="ui-auto-spin"> Motorized Spin</div>
+      </div>
+    </div>
+
+    <!-- LIGHTING TAB -->
+    <div id="tab-lighting" class="tab-content">
+      <div class="control-group">
+        <h3>Key Light</h3>
+        <div class="control-row"><label>Intensity</label><input type="range" id="ui-key-int" min="0" max="1000" value="164"></div>
+        <div class="control-row"><label>Color</label><input type="color" id="ui-key-color" value="#ffffff"></div>
+        <div class="toggle-row"><input type="checkbox" id="ui-key-help" checked> Show Helper Box</div>
+      </div>
+      <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 5px 0;">
+      <div class="control-group">
+        <h3>Fill Light</h3>
+        <div class="control-row"><label>Intensity</label><input type="range" id="ui-fill-int" min="0" max="1000" value="226"></div>
+        <div class="control-row"><label>Color</label><input type="color" id="ui-fill-color" value="#ffffff"></div>
+        <div class="toggle-row"><input type="checkbox" id="ui-fill-help" checked> Show Helper Box</div>
+      </div>
+      <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 5px 0;">
+      <div class="control-group">
+        <h3>Rim / Hair Light</h3>
+        <div class="control-row"><label>Intensity</label><input type="range" id="ui-rim-int" min="0" max="1000" value="350"></div>
+        <div class="control-row"><label>Color</label><input type="color" id="ui-rim-color" value="#ffffff"></div>
+        <div class="toggle-row"><input type="checkbox" id="ui-rim-help" checked> Show Helper Box</div>
+      </div>
+    </div>
+
+    <!-- STAGE TAB -->
+    <div id="tab-stage" class="tab-content">
+      <div class="control-group">
+        <h3>Seamless Cyclorama</h3>
+        <div class="control-row"><label>Paper Color</label><input type="color" id="ui-cyc-color" value="#8a2020"></div>
+        <div class="control-row"><label>Roughness</label><input type="range" id="ui-cyc-rough" min="0" max="1" value="0.85" step="0.01"></div>
+      </div>
+      <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 5px 0;">
+      <div class="control-group">
+        <h3>Ambient Bounce</h3>
+        <div class="control-row"><label>Intensity</label><input type="range" id="ui-amb-int" min="0" max="5" value="1" step="0.1"></div>
+        <div class="control-row"><label>HDRI Refl.</label><input type="range" id="ui-hdri-int" min="0" max="3" value="0.2" step="0.1"></div>
+      </div>
+    </div>
+  </div>
+`
+document.body.insertAdjacentHTML('beforeend', studioUIHTML)
+
+const studioSidebar = document.getElementById('studio-sidebar')
+
+// --- TAB LOGIC ---
+document.querySelectorAll('.tab-btn').forEach(btn => {
+  btn.addEventListener('click', (e) => {
+    // Remove active class from all tabs and contents
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+    
+    // Add active class to clicked tab
+    e.target.classList.add('active')
+    document.getElementById(e.target.dataset.tab).classList.add('active')
+  })
+})
+
+// --- WIRING THE CONTROLS ---
+// Subject
+document.getElementById('ui-upload').addEventListener('click', () => fileInput.click())
+document.getElementById('ui-scale').addEventListener('input', (e) => { if (subject) subject.scale.setScalar(e.target.value) })
+document.getElementById('ui-height').addEventListener('input', (e) => { if (subject) subject.position.y = e.target.value })
+document.getElementById('ui-spin-angle').addEventListener('input', (e) => { if (subject && !turntableState.autoSpin) subject.rotation.y = THREE.MathUtils.degToRad(e.target.value) })
+document.getElementById('ui-auto-spin').addEventListener('change', (e) => turntableState.autoSpin = e.target.checked)
+document.getElementById('ui-spin-speed').addEventListener('input', (e) => turntableState.speed = parseFloat(e.target.value))
+
+// Lighting
+document.getElementById('ui-key-int').addEventListener('input', (e) => light.intensity = e.target.value)
+document.getElementById('ui-key-color').addEventListener('input', (e) => { light.color.set(e.target.value); keysoftboxMaterial.color.set(e.target.value) })
+document.getElementById('ui-key-help').addEventListener('change', (e) => lightHelperToggle.showHelper = e.target.checked)
+
+document.getElementById('ui-fill-int').addEventListener('input', (e) => fillLight.intensity = e.target.value)
+document.getElementById('ui-fill-color').addEventListener('input', (e) => { fillLight.color.set(e.target.value); fillsoftboxMaterial.color.set(e.target.value) })
+document.getElementById('ui-fill-help').addEventListener('change', (e) => fillLightHelperToggle.showHelper = e.target.checked)
+
+document.getElementById('ui-rim-int').addEventListener('input', (e) => rimLight.intensity = e.target.value)
+document.getElementById('ui-rim-color').addEventListener('input', (e) => { rimLight.color.set(e.target.value); rimSoftboxMaterial.color.set(e.target.value) })
+document.getElementById('ui-rim-help').addEventListener('change', (e) => rimLightHelperToggle.showHelper = e.target.checked)
+
+// Stage
+document.getElementById('ui-cyc-color').addEventListener('input', (e) => cycMaterial.color.set(e.target.value))
+document.getElementById('ui-cyc-rough').addEventListener('input', (e) => cycMaterial.roughness = e.target.value)
+document.getElementById('ui-amb-int').addEventListener('input', (e) => ambientBounce.intensity = e.target.value)
+document.getElementById('ui-hdri-int').addEventListener('input', (e) => scene.environmentIntensity = e.target.value)
+
+// The universal toggle logic
 function toggleCameraMode() {
   isCameraMode = !isCameraMode
-
   if (isCameraMode) {
-    gui.hide()
-    cameraGui.show()
+    // gui.hide()
+    glassDeck.style.display = 'flex' // Reveal the custom glass UI
+    studioSidebar.style.display = 'none'
     viewfinder.style.display = 'block'
-
+    
     modeButton.innerText = '✖'
-    modeButton.style.backgroundColor = 'rgba(138, 32, 32, 0.8)' // Red tint
-
+    modeButton.style.backgroundColor = 'rgba(138, 32, 32, 0.8)'
+    
     updateHUD()
 
     lightHelper.visible = false
     fillLightHelper.visible = false
-    rimSoftbox.visible = false
-
+    rimLightHelper.visible = false
     keySoftbox.visible = false
     fillSoftbox.visible = false
     rimSoftbox.visible = false
   } else {
-    gui.show()
-    cameraGui.hide()
+    // gui.show()
+    glassDeck.style.display = 'none' // Hide the custom glass UI
+    studioSidebar.style.display = 'block'
     viewfinder.style.display = 'none'
-
+    
     modeButton.innerText = '📷'
     modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
 
     lightHelper.visible = lightHelperToggle.showHelper
     fillLightHelper.visible = fillLightHelperToggle.showHelper
+    rimLightHelper.visible = rimLightHelperToggle.showHelper
     keySoftbox.visible = true
     fillSoftbox.visible = true
     rimSoftbox.visible = true
@@ -747,89 +962,89 @@ window.addEventListener('keydown', (event) => {
 })
 
 // Folder to keep UI organized
-const lightFolder = gui.addFolder('Key Light Setup')
+// const lightFolder = gui.addFolder('Key Light Setup')
 
-// Bind sliders to light position
-lightFolder.add(light.position, 'x', -10, 10).name('Position X').onChange(() => lightHelper.update())
-lightFolder.add(light.position, 'y', 0, 10).name('Position Y').onChange(() => lightHelper.update())
-lightFolder.add(light.position, 'z', -10, 10).name('Position Z').onChange(() => lightHelper.update())
+// // Bind sliders to light position
+// lightFolder.add(light.position, 'x', -10, 10).name('Position X').onChange(() => lightHelper.update())
+// lightFolder.add(light.position, 'y', 0, 10).name('Position Y').onChange(() => lightHelper.update())
+// lightFolder.add(light.position, 'z', -10, 10).name('Position Z').onChange(() => lightHelper.update())
 
-// Bind a slider to light intensity
-lightFolder.add(light, 'intensity', 0, 1000).name('Intensity')
+// // Bind a slider to light intensity
+// lightFolder.add(light, 'intensity', 0, 1000).name('Intensity')
 
-// Unified Key Light Color Picker
-lightFolder.addColor(lightColors, 'key').name('Gel Color').onChange((value) => {
-  light.color.set(value);
-  keysoftboxMaterial.color.set(value);
-  lightHelper.update();
-});
+// // Unified Key Light Color Picker
+// lightFolder.addColor(lightColors, 'key').name('Gel Color').onChange((value) => {
+//   light.color.set(value);
+//   keysoftboxMaterial.color.set(value);
+//   lightHelper.update();
+// });
 
-// The Photography Controls
-lightFolder.add(light, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => lightHelper.update())
-lightFolder.add(light, 'penumbra', 0, 1).name('Penumbra').onChange(() => lightHelper.update())
+// // The Photography Controls
+// lightFolder.add(light, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => lightHelper.update())
+// lightFolder.add(light, 'penumbra', 0, 1).name('Penumbra').onChange(() => lightHelper.update())
 
-// Helper toggle for main light
-const lightHelperToggle = { showHelper: true }
-lightFolder.add(lightHelperToggle, 'showHelper').name('Show Key Light Helper').onChange((value) => {
-  lightHelper.visible = value
-})
-
-
-// Folders remain open by default for easy access to controls
-lightFolder.open()
+// // Helper toggle for main light
+// const lightHelperToggle = { showHelper: true }
+// lightFolder.add(lightHelperToggle, 'showHelper').name('Show Key Light Helper').onChange((value) => {
+//   lightHelper.visible = value
+// })
 
 
-// Controls for the fill light
-const fillLightFolder = gui.addFolder('Fill Light Setup')
+// // Folders remain open by default for easy access to controls
+// lightFolder.open()
 
-// Bind sliders to fill light position
-fillLightFolder.add(fillLight.position, 'x', -10, 10).name('Position X').onChange(() => fillLightHelper.update())
-fillLightFolder.add(fillLight.position, 'y', 0, 10).name('Position Y').onChange(() => fillLightHelper.update())
-fillLightFolder.add(fillLight.position, 'z', -10, 10).name('Position Z').onChange(() => fillLightHelper.update())
 
-// Bind a slider to fill light intensity
-fillLightFolder.add(fillLight, 'intensity', 0, 1000).name('Intensity')
+// // Controls for the fill light
+// const fillLightFolder = gui.addFolder('Fill Light Setup')
 
-// Helper toggle for fill light
-const fillLightHelperToggle = { showHelper: true }
-fillLightFolder.add(fillLightHelperToggle, 'showHelper').name('Show Fill Light Helper').onChange((value) => {
-  fillLightHelper.visible = value
-})
+// // Bind sliders to fill light position
+// fillLightFolder.add(fillLight.position, 'x', -10, 10).name('Position X').onChange(() => fillLightHelper.update())
+// fillLightFolder.add(fillLight.position, 'y', 0, 10).name('Position Y').onChange(() => fillLightHelper.update())
+// fillLightFolder.add(fillLight.position, 'z', -10, 10).name('Position Z').onChange(() => fillLightHelper.update())
 
-// The Photography Controls
-fillLightFolder.add(fillLight, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => fillLightHelper.update())
-fillLightFolder.add(fillLight, 'penumbra', 0, 1).name('Penumbra').onChange(() => fillLightHelper.update())
+// // Bind a slider to fill light intensity
+// fillLightFolder.add(fillLight, 'intensity', 0, 1000).name('Intensity')
 
-// Unified Fill Light Color Picker
-fillLightFolder.addColor(lightColors, 'fill').name('Gel Color').onChange((value) => {
-  fillLight.color.set(value);
-  fillsoftboxMaterial.color.set(value);
-  fillLightHelper.update();
-});
+// // Helper toggle for fill light
+// const fillLightHelperToggle = { showHelper: true }
+// fillLightFolder.add(fillLightHelperToggle, 'showHelper').name('Show Fill Light Helper').onChange((value) => {
+//   fillLightHelper.visible = value
+// })
 
-// Folders kept closed by default to avoid cluttering the UI
-fillLightFolder.close()
+// // The Photography Controls
+// fillLightFolder.add(fillLight, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => fillLightHelper.update())
+// fillLightFolder.add(fillLight, 'penumbra', 0, 1).name('Penumbra').onChange(() => fillLightHelper.update())
+
+// // Unified Fill Light Color Picker
+// fillLightFolder.addColor(lightColors, 'fill').name('Gel Color').onChange((value) => {
+//   fillLight.color.set(value);
+//   fillsoftboxMaterial.color.set(value);
+//   fillLightHelper.update();
+// });
+
+// // Folders kept closed by default to avoid cluttering the UI
+// fillLightFolder.close()
 
 
 
 // --- Rim Light GUI ---
-const rimLightFolder = gui.addFolder('Rim / Hair Light Setup')
-rimLightFolder.add(rimLight.position, 'x', -10, 10).name('Position X').onChange(() => rimLightHelper.update())
-rimLightFolder.add(rimLight.position, 'y', 0, 15).name('Position Y').onChange(() => rimLightHelper.update())
-rimLightFolder.add(rimLight.position, 'z', -15, 10).name('Position Z').onChange(() => rimLightHelper.update())
-rimLightFolder.add(rimLight, 'intensity', 0, 1000).name('Intensity')
-rimLightFolder.add(rimLight, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => rimLightHelper.update())
-rimLightFolder.add(rimLight, 'penumbra', 0, 1).name('Penumbra').onChange(() => rimLightHelper.update())
+// const rimLightFolder = gui.addFolder('Rim / Hair Light Setup')
+// rimLightFolder.add(rimLight.position, 'x', -10, 10).name('Position X').onChange(() => rimLightHelper.update())
+// rimLightFolder.add(rimLight.position, 'y', 0, 15).name('Position Y').onChange(() => rimLightHelper.update())
+// rimLightFolder.add(rimLight.position, 'z', -15, 10).name('Position Z').onChange(() => rimLightHelper.update())
+// rimLightFolder.add(rimLight, 'intensity', 0, 1000).name('Intensity')
+// rimLightFolder.add(rimLight, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => rimLightHelper.update())
+// rimLightFolder.add(rimLight, 'penumbra', 0, 1).name('Penumbra').onChange(() => rimLightHelper.update())
 
-rimLightFolder.addColor(lightColors, 'rim').name('Gel Color').onChange((value) => {
-  rimLight.color.set(value);
-  rimSoftboxMaterial.color.set(value);
-  rimLightHelper.update();
-});
+// rimLightFolder.addColor(lightColors, 'rim').name('Gel Color').onChange((value) => {
+//   rimLight.color.set(value);
+//   rimSoftboxMaterial.color.set(value);
+//   rimLightHelper.update();
+// });
 
-const rimLightHelperToggle = { showHelper: true }
-rimLightFolder.add(rimLightHelperToggle, 'showHelper').name('Show Rim Light Helper').onChange((val) => rimLightHelper.visible = val)
-rimLightFolder.close()
+// const rimLightHelperToggle = { showHelper: true }
+// rimLightFolder.add(rimLightHelperToggle, 'showHelper').name('Show Rim Light Helper').onChange((val) => rimLightHelper.visible = val)
+// rimLightFolder.close()
 
 // --- Turntable GUI ---
 const turntableState = {
@@ -838,40 +1053,40 @@ const turntableState = {
   speed: 0.5
 }
 
-const turntableFolder = gui.addFolder('Subject Turntable')
-// Modifying the proxy state instead of the raw subject preserves the UI when uploading new files
-turntableFolder.add(turntableState, 'rotation', 0, 360).name('Manual Angle').onChange((val) => {
-  if (subject && !turntableState.autoSpin) {
-    subject.rotation.y = THREE.MathUtils.degToRad(val)
-  }
-}).listen()
-turntableFolder.add(turntableState, 'autoSpin').name('Motorized Spin')
-turntableFolder.add(turntableState, 'speed', 0.1, 5).name('Spin Speed')
-turntableFolder.open()
+// const turntableFolder = gui.addFolder('Subject Turntable')
+// // Modifying the proxy state instead of the raw subject preserves the UI when uploading new files
+// turntableFolder.add(turntableState, 'rotation', 0, 360).name('Manual Angle').onChange((val) => {
+//   if (subject && !turntableState.autoSpin) {
+//     subject.rotation.y = THREE.MathUtils.degToRad(val)
+//   }
+// }).listen()
+// turntableFolder.add(turntableState, 'autoSpin').name('Motorized Spin')
+// turntableFolder.add(turntableState, 'speed', 0.1, 5).name('Spin Speed')
+// turntableFolder.open()
 
 
 
 // --- Cyclorama GUI Controls ---
-const cycFolder = gui.addFolder('Cyclorama Backdrop')
+// const cycFolder = gui.addFolder('Cyclorama Backdrop')
 
 // Holds default cyc color
 const cycState = {
   color: '#990a00'
 }
 
-cycFolder.addColor(cycState, 'color').name('Paper Color').onChange((val) => {
-  // Updates the seamless color based on user input
-  cycMaterial.color.set(val)
+// cycFolder.addColor(cycState, 'color').name('Paper Color').onChange((val) => {
+//   // Updates the seamless color based on user input
+//   cycMaterial.color.set(val)
 
-  // // By matching the background and fog, it appears to be infinite
-  // scene.background.set(val)
-  // scene.fog.color.set(val)
-})
+//   // // By matching the background and fog, it appears to be infinite
+//   // scene.background.set(val)
+//   // scene.fog.color.set(val)
+// })
 
-cycFolder.add(cycMaterial, 'roughness', 0, 1).name('Surface Roughness')
-cycFolder.add(cycMaterial, 'metalness', 0, 1).name('Surface Reflection')
+// cycFolder.add(cycMaterial, 'roughness', 0, 1).name('Surface Roughness')
+// cycFolder.add(cycMaterial, 'metalness', 0, 1).name('Surface Reflection')
 
-cycFolder.open()
+// cycFolder.open()
 // --- SUBJECT MATERIAL CONTROLS ---
 
 // const materialFolder = gui.addFolder('Subject Surface')
@@ -886,15 +1101,15 @@ const ambientBounce = new THREE.HemisphereLight(0x111111, 0x444444, 0.5)
 scene.add(ambientBounce)
 
 // --- AMBIENT CONTROLS ---
-const ambientFolder = gui.addFolder('Ambient / Floor Bounce');
-ambientFolder.add(ambientBounce, 'intensity', 0, 5).name('Bounce Intensity');
-ambientFolder.addColor({ sky: '#111111' }, 'sky').name('Sky Ambient').onChange((val) => ambientBounce.color.set(val));
-ambientFolder.addColor({ ground: '#444444' }, 'ground').name('Floor Bounce').onChange((val) => ambientBounce.groundColor.set(val));
+// const ambientFolder = gui.addFolder('Ambient / Floor Bounce');
+// ambientFolder.add(ambientBounce, 'intensity', 0, 5).name('Bounce Intensity');
+// ambientFolder.addColor({ sky: '#111111' }, 'sky').name('Sky Ambient').onChange((val) => ambientBounce.color.set(val));
+// ambientFolder.addColor({ ground: '#444444' }, 'ground').name('Floor Bounce').onChange((val) => ambientBounce.groundColor.set(val));
 
-ambientFolder.add(scene, 'environmentIntensity', 0, 3).name('HDRI Reflection Strength')
+// ambientFolder.add(scene, 'environmentIntensity', 0, 3).name('HDRI Reflection Strength')
 
-// Close the ambient folder by default to keep the UI clean
-ambientFolder.close()
+// // Close the ambient folder by default to keep the UI clean
+// ambientFolder.close()
 
 // --- Window Resize Handling ---
 window.addEventListener('resize', () => {
@@ -906,7 +1121,7 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight)
   composer.setSize(window.innerWidth, window.innerHeight)
 
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+  const pixelRatio = Math.min(window.devicePixelRatio, 2)
   renderer.setPixelRatio(pixelRatio)
 
   composer.setPixelRatio(pixelRatio)
@@ -939,13 +1154,13 @@ document.body.appendChild(viewfinder)
 // --- HUD ---
 const hud = document.createElement('div')
 hud.style.position = 'absolute'
-hud.style.bottom = '15px'
+hud.style.top = '40px'
 hud.style.left = '50%'
 hud.style.transform = 'translateX(-50%)'
 hud.style.color = '#00ff00' // Green for the text like a DSLR
 hud.style.fontFamily = "'CustomDigitalFont', monospace";
 hud.style.fontSize = '20px'
-hud.style.letterSpacing = '2px'
+hud.style.letterSpacing = '1px'
 // hud.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)'
 viewfinder.appendChild(hud)
 
@@ -959,7 +1174,7 @@ function updateHUD() {
   const ssDisplay = lensState.shutterSpeed >= 1 ? '1"' : `1/${Math.round(1 / lensState.shutterSpeed)}`
 
   // Inject the expanded readout into the HUD
-  hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso} &nbsp;|&nbsp; ${focusDist}m`
+  hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso}`
 
 }
 
@@ -1150,7 +1365,7 @@ function animate(time) {
 
 renderer.setAnimationLoop(animate)
 
-if (window.innerWidth < 768) {
-  gui.close() // Start the main menu closed on phones
-  cameraFolder.close()
-}
+// if (window.innerWidth < 768) {
+//   // gui.close() // Start the main menu closed on phones
+//   // cameraFolder.close()
+// }

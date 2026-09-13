@@ -9,3 +9,255 @@ canvas {
   display: block;
   touch-action: none;
 }
+
+.camera-glass-deck {
+  position: absolute;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 90%;
+  max-width: 600px;
+  background: rgba(15, 15, 15, 0.4);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 15px 25px;
+  display: none;
+  /* Hidden until Camera Mode is active */
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  z-index: 2000;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: white;
+}
+
+.lens-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex-grow: 1;
+}
+
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.control-row label {
+  font-size: 13px;
+  font-weight: 300;
+  /* text-transform: uppercase; */
+  /* letter-spacing: 1px; */
+  color: rgba(255, 255, 255, 0.7);
+  width: 65px;
+}
+
+/* Custom Sliders */
+input[type=range] {
+  -webkit-appearance: none;
+  appearance: none;
+  flex-grow: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 2px;
+  outline: none;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #ffffff;
+  cursor: pointer;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+/* Custom Dropdowns */
+select {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: white;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+  cursor: pointer;
+}
+
+select option {
+  background: #1a1a1a;
+  color: #ffffff;
+}
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 300;
+  margin-top: 5px;
+  margin-bottom: 5px
+}
+
+/* Circular Shutter Button */
+.shutter-btn {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  border: 3px solid rgba(255, 255, 255, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: transform 0.1s ease;
+}
+
+.shutter-btn:active {
+  transform: scale(0.92);
+}
+
+.shutter-inner {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: white;
+  transition: background 0.1s ease;
+}
+
+.shutter-btn:active .shutter-inner {
+  background: #dcdcdc;
+}
+
+
+/* --- GLASSMORPHISM STUDIO SIDEBAR --- */
+.studio-sidebar {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 320px;
+  max-height: calc(100vh - 40px);
+  overflow-y: auto;
+  background: rgba(15, 15, 15, 0.4);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 40px;
+  padding: 30px;
+  padding-top: 40px;
+  padding-bottom: 45px;
+  z-index: 1000;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color: white;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+/* Custom Scrollbar */
+.studio-sidebar::-webkit-scrollbar {
+  width: 4px;
+}
+
+.studio-sidebar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+}
+
+/* Tab Navigation */
+.tabs {
+  display: flex;
+  /* gap: 0px; */
+  margin-bottom: 20px;
+  border-bottom: 0.5px solid rgba(255, 255, 255, 0.1);
+  /* padding-bottom: 30px; */
+}
+
+.tab-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 15px 0;
+  transition: color 0.2s;
+}
+
+.tab-btn.active {
+  color: white;
+  border-bottom: 2px solid white;
+}
+
+/* Tab Content Areas */
+.tab-content {
+  display: none;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.tab-content.active {
+  display: flex;
+}
+
+/* Control Groups */
+.control-group {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.control-group h3 {
+  margin: 0;
+  font-size: 13px;
+  padding-top: 20px;
+  text-transform: uppercase;
+  font-weight: 00;
+  /* letter-spacing: 1px; */
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.upload-btn {
+  background: rgba(255, 255, 255, 0.2);
+  /* border: 0.1px solid rgba(255, 255, 255, 0.15);  */
+  color: white;
+  padding: 12px;
+  border-radius: 40px;
+  font-size: 13px;
+  font-weight: 400;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.2s;
+}
+
+.upload-btn:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+/* Color Pickers */
+input[type=color] {
+  -webkit-appearance: none;
+  appearance: none;
+  border: none;
+  width: 100%;
+  height: 28px;
+  border-radius: 6px;
+  cursor: pointer;
+  background: transparent;
+  padding: 0;
+}
+
+input[type=color]::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+input[type=color]::-webkit-color-swatch {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 0px;
+}
