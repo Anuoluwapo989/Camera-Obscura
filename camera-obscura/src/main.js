@@ -870,6 +870,21 @@ document.body.insertAdjacentHTML('beforeend', studioUIHTML)
 
 const studioSidebar = document.getElementById('studio-sidebar')
 
+// --- SIDEBAR TOGGLE LOGIC ---
+const toggleBtnHTML = `<div id="sidebar-toggle" class="sidebar-toggle"><img src = '/settings.svg' width = 40%></div>`
+document.body.insertAdjacentHTML('beforeend', toggleBtnHTML)
+
+const sidebarToggle = document.getElementById('sidebar-toggle')
+
+// Start closed on mobile, open on desktop
+let isSidebarOpen = window.innerWidth >= 768 
+studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
+
+sidebarToggle.addEventListener('click', () => {
+  isSidebarOpen = !isSidebarOpen
+  studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
+})
+
 // --- TAB LOGIC ---
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {

@@ -139,10 +139,10 @@ select option {
 /* --- GLASSMORPHISM STUDIO SIDEBAR --- */
 .studio-sidebar {
   position: absolute;
-  top: 20px;
+  top: 75px; 
   right: 20px;
   width: 320px;
-  max-height: calc(100vh - 40px);
+  max-height: calc(100vh - 95px);
   overflow-y: auto;
   background: rgba(15, 15, 15, 0.4);
   -webkit-backdrop-filter: blur(24px);
@@ -158,6 +158,30 @@ select option {
   color: white;
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
+
+/* --- SIDEBAR TOGGLE BUTTON --- */
+.sidebar-toggle {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(15, 15, 15, 0.4);
+  -webkit-backdrop-filter: blur(24px);
+  backdrop-filter: blur(24px);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 1001;
+  font-size: 20px;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  transition: transform 0.1s ease;
+}
+.sidebar-toggle:active { transform: scale(0.9); }
 
 /* Custom Scrollbar */
 .studio-sidebar::-webkit-scrollbar {
