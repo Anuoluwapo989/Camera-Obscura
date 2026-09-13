@@ -51,7 +51,10 @@ const lightColors = {
 const canvas = document.querySelector('#myCanvas');
 const renderer = new THREE.WebGLRenderer({ canvas: canvas, preserveDrawingBuffer: true, antialias: true })
 renderer.setSize(window.innerWidth, window.innerHeight)
-renderer.setPixelRatio(window.devicePixelRatio)
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
+const initialCanvasRect = canvas.getBoundingClientRect()
+camera.aspect = initialCanvasRect.width / initialCanvasRect.height
+camera.updateProjectionMatrix()
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFShadowMap
 
@@ -73,17 +76,19 @@ canvas.addEventListener('webglcontextlost', (event) => {
 canvas.addEventListener('webglcontextrestored', () => {
   console.log('WebGL Context Restored. Rebuilding graohics pipeline...')
   renderer.setSize(window.innerWidth, window.innerHeight)
-  composer.setSize(window.innerWidth, window.innerHeight)
+  composer.setSize(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio)
 }, false)
 
 // Post-processing (Lens Optics)
+const pixelRatio = Math.min(window.devicePixelRatio, 2)
 const rendertarget = new THREE.WebGLRenderTarget(
-  window.innerWidth,
-  window.innerHeight,
+  window.innerWidth * pixelRatio,
+  window.innerHeight * pixelRatio,
   { samples: 4 })
 const composer = new EffectComposer(renderer, rendertarget)
 
-composer.setPixelRatio(window.devicePixelRatio)
+composer.setPixelRatio(1)
+composer.setSize(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio)
 
 // Draw the base 3D Scene
 const renderPass = new RenderPass(scene, camera)
@@ -94,8 +99,8 @@ const bokehPass = new BokehPass(scene, camera, {
   focus: 4.5,
   aperture: 0.000,
   maxblur: 0.00,
-  width: window.innerWidth,
-  height: window.innerHeight
+  width: window.innerWidth * pixelRatio,
+  height: window.innerHeight * pixelRatio
 })
 composer.addPass(bokehPass)
 
@@ -775,7 +780,21 @@ updateExposure()
 // --- Application Controls & Mobile UI ---
 let isCameraMode = false
 
-
+// 1. Create a floating UI Button
+const modeButton = document.createElement('button')
+modeButton.innerText = '📷'
+modeButton.style.position = 'absolute'
+modeButton.style.top = '15px'
+modeButton.style.left = '15px'
+modeButton.style.padding = '10px 15px'
+modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
+modeButton.style.color = '#ffffff'
+modeButton.style.border = '1px solid #444'
+modeButton.style.borderRadius = '5px'
+modeButton.style.fontFamily = 'monospace'
+modeButton.style.cursor = 'pointer'
+modeButton.style.zIndex = '1000' // Keeps it on top of the canvas
+document.body.appendChild(modeButton)
 
 
 // --- CUSTOM GLASSMORPHISM STUDIO UI ---
@@ -849,6 +868,21 @@ document.body.insertAdjacentHTML('beforeend', studioUIHTML)
 
 const studioSidebar = document.getElementById('studio-sidebar')
 
+// --- SIDEBAR TOGGLE LOGIC ---
+const toggleBtnHTML = `<div id="sidebar-toggle" class="sidebar-toggle"><img src = '/settings.svg' width = 40%></div>`
+document.body.insertAdjacentHTML('beforeend', toggleBtnHTML)
+
+const sidebarToggle = document.getElementById('sidebar-toggle')
+
+// Start closed on mobile, open on desktop
+let isSidebarOpen = window.innerWidth >= 768 
+studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
+
+sidebarToggle.addEventListener('click', () => {
+  isSidebarOpen = !isSidebarOpen
+  studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
+})
+
 // --- TAB LOGIC ---
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
@@ -872,10 +906,6 @@ document.getElementById('ui-auto-spin').addEventListener('change', (e) => turnta
 document.getElementById('ui-spin-speed').addEventListener('input', (e) => turntableState.speed = parseFloat(e.target.value))
 
 // Lighting
-const lightHelperToggle = { showHelper: true }
-const fillLightHelperToggle = { showHelper: true }
-const rimLightHelperToggle = { showHelper: true }
-
 document.getElementById('ui-key-int').addEventListener('input', (e) => light.intensity = e.target.value)
 document.getElementById('ui-key-color').addEventListener('input', (e) => { light.color.set(e.target.value); keysoftboxMaterial.color.set(e.target.value) })
 document.getElementById('ui-key-help').addEventListener('change', (e) => lightHelperToggle.showHelper = e.target.checked)
@@ -894,39 +924,17 @@ document.getElementById('ui-cyc-rough').addEventListener('input', (e) => cycMate
 document.getElementById('ui-amb-int').addEventListener('input', (e) => ambientBounce.intensity = e.target.value)
 document.getElementById('ui-hdri-int').addEventListener('input', (e) => scene.environmentIntensity = e.target.value)
 
-
-// --- UNIFIED UI TOGGLES ---
-const uiTogglesHTML = `
-  <div id="camera-toggle" class="glass-btn">📷</div>
-  <div id="sidebar-toggle" class="glass-btn"><img src='/settings.svg' style="width: 50%; opacity: 0.8;"></div>
-`
-document.body.insertAdjacentHTML('beforeend', uiTogglesHTML)
-
-const cameraToggle = document.getElementById('camera-toggle')
-const sidebarToggle = document.getElementById('sidebar-toggle')
-
-// Sidebar visibility state
-let isSidebarOpen = window.innerWidth >= 768 
-studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
-
-sidebarToggle.addEventListener('click', () => {
-  isSidebarOpen = !isSidebarOpen
-  studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
-})
-
-
 // The universal toggle logic
 function toggleCameraMode() {
   isCameraMode = !isCameraMode
   if (isCameraMode) {
-    glassDeck.style.display = 'flex'
+    // gui.hide()
+    glassDeck.style.display = 'flex' // Reveal the custom glass UI
     studioSidebar.style.display = 'none'
-    sidebarToggle.style.display = 'none' // Hide the settings gear
     viewfinder.style.display = 'block'
     
-    // Update circular button to active exit state
-    cameraToggle.innerText = '✖'
-    cameraToggle.classList.add('active')
+    modeButton.innerText = '✖'
+    modeButton.style.backgroundColor = 'rgba(138, 32, 32, 0.8)'
     
     updateHUD()
 
@@ -937,14 +945,13 @@ function toggleCameraMode() {
     fillSoftbox.visible = false
     rimSoftbox.visible = false
   } else {
-    glassDeck.style.display = 'none'
-    sidebarToggle.style.display = 'flex' // Restore settings gear
-    studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
+    // gui.show()
+    glassDeck.style.display = 'none' // Hide the custom glass UI
+    studioSidebar.style.display = 'block'
     viewfinder.style.display = 'none'
     
-    // Restore normal camera button
-    cameraToggle.innerText = '📷'
-    cameraToggle.classList.remove('active')
+    modeButton.innerText = '📷'
+    modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
 
     lightHelper.visible = lightHelperToggle.showHelper
     fillLightHelper.visible = fillLightHelperToggle.showHelper
@@ -955,16 +962,8 @@ function toggleCameraMode() {
   }
 }
 
-// Bind to the new button
-cameraToggle.addEventListener('click', toggleCameraMode)
-
-window.addEventListener('keydown', (event) => {
-  if ((event.key === 'c' || event.key === 'C') && !isCameraMode) {
-    toggleCameraMode()
-  } else if (event.key === 'Escape' && isCameraMode) {
-    toggleCameraMode()
-  }
-})
+// 3. Bind it to BOTH the button click and the keyboard shortcuts
+modeButton.addEventListener('click', toggleCameraMode)
 
 window.addEventListener('keydown', (event) => {
   if ((event.key === 'c' || event.key === 'C') && !isCameraMode) {
@@ -1127,17 +1126,17 @@ scene.add(ambientBounce)
 // --- Window Resize Handling ---
 window.addEventListener('resize', () => {
   // Update the camera's aspect ratio and projection matrix to match the new window dimensions
-  camera.aspect = window.innerWidth / window.innerHeight
+  const canvasRect = canvas.getBoundingClientRect()
+  camera.aspect = canvasRect.width / canvasRect.height
   camera.updateProjectionMatrix()
 
   // Update the renderer size and pixel ratio to match the new window dimensions
   renderer.setSize(window.innerWidth, window.innerHeight)
-  composer.setSize(window.innerWidth, window.innerHeight)
 
   const pixelRatio = Math.min(window.devicePixelRatio, 2)
   renderer.setPixelRatio(pixelRatio)
 
-  composer.setPixelRatio(pixelRatio)
+  composer.setSize(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio)
 })
 
 // --- Viewfinder Overlay ---
@@ -1300,16 +1299,48 @@ window.addEventListener('pointerup', (e) => {
   focusBox.style.opacity = '1'
   focusBox.style.borderColor = 'rgba(255, 255, 255, 0.8)' // Reset to white initially
 
-  //Fire the Raycaster
-  mouse.x = (targetPixelX / window.innerWidth) * 2 - 1
-  mouse.y = -(targetPixelY / window.innerHeight) * 2 + 1
+  // Convert screen coordinates using the canvas bounds, not the window bounds.
+  // This keeps the ray aligned when the canvas is scaled or offset by responsive UI.
+  const canvasRect = canvas.getBoundingClientRect()
+  if (canvasRect.width === 0 || canvasRect.height === 0) return
+
+  mouse.x = ((targetPixelX - canvasRect.left) / canvasRect.width) * 2 - 1
+  mouse.y = -((targetPixelY - canvasRect.top) / canvasRect.height) * 2 + 1
   raycaster.setFromCamera(mouse, camera)
 
-  const objectsToTest = subject ? [subject, cyclorama] : [cyclorama]
-  const intersects = raycaster.intersectObjects(objectsToTest, true)
+  camera.updateMatrixWorld()
 
-  if (intersects.length > 0) {
-    const hitPoint = intersects[0].point
+  let hitPoint = null
+  if (subject) {
+    const subjectIntersects = raycaster.intersectObject(subject, true)
+    if (subjectIntersects.length > 0) {
+      hitPoint = subjectIntersects[0].point
+    } else {
+      // A distant subject can be smaller than a pixel or two. Use its projected
+      // bounds as a forgiving autofocus target before falling back to the floor.
+      const subjectBounds = new THREE.Box3().setFromObject(subject)
+      const subjectSphere = subjectBounds.getBoundingSphere(new THREE.Sphere())
+      const projectedCenter = subjectSphere.center.clone().project(camera)
+      const projectedEdge = subjectSphere.center.clone()
+        .add(new THREE.Vector3(subjectSphere.radius, 0, 0))
+        .project(camera)
+      const projectedRadiusX = Math.abs(projectedEdge.x - projectedCenter.x) * canvasRect.width / 2
+      const projectedCenterX = canvasRect.left + (projectedCenter.x + 1) * canvasRect.width / 2
+      const projectedCenterY = canvasRect.top + (1 - projectedCenter.y) * canvasRect.height / 2
+      const distanceToSubject = Math.hypot(targetPixelX - projectedCenterX, targetPixelY - projectedCenterY)
+
+      if (distanceToSubject <= Math.max(projectedRadiusX, 12)) {
+        hitPoint = raycaster.ray.intersectSphere(subjectSphere, new THREE.Vector3())
+      }
+    }
+  }
+
+  if (!hitPoint) {
+    const backdropIntersects = raycaster.intersectObject(cyclorama, true)
+    if (backdropIntersects.length > 0) hitPoint = backdropIntersects[0].point
+  }
+
+  if (hitPoint) {
 
     // --- Optical Planar Math ---
     // 1. Get the direction the camera lens is physically pointing
