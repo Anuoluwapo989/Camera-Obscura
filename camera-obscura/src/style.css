@@ -21,8 +21,8 @@ canvas {
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
   border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 20px;
-  padding: 15px 25px;
+  border-radius: 50px;
+  padding: 30px 25px;
   display: none;
   /* Hidden until Camera Mode is active */
   align-items: center;
@@ -245,12 +245,13 @@ input[type=color] {
   -webkit-appearance: none;
   appearance: none;
   border: none;
-  width: 100%;
+  width: 75%;
   height: 28px;
-  border-radius: 6px;
+  border-radius: 14px;
   cursor: pointer;
   background: transparent;
   padding: 0;
+  align-self: flex-end;
 }
 
 input[type=color]::-webkit-color-swatch-wrapper {

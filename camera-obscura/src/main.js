@@ -108,6 +108,7 @@ const controls = new OrbitControls(camera, renderer.domElement)
 controls.enableDamping = true
 controls.dampingFactor = 0.05
 controls.screenSpacePanning = false
+controls.enablePan = false
 
 // VERTICAL LOCKS (Y-Axis)
 // Prevents camera from dipping below the floor (with a 0.05 buffer to prevent clipping)
@@ -507,8 +508,12 @@ scene.add(cyclorama)
 
 
 // --- A working Camera ---
+
 const cameraActions = {
   takeSnapshot: () => {
+    // 1. Physically pause the main animation loop so it doesn't interfere
+    renderer.setAnimationLoop(null)
+
     const currentWidth = window.innerWidth
     const currentHeight = window.innerHeight
     const currentAspect = camera.aspect
@@ -517,50 +522,44 @@ const cameraActions = {
     const exportWidth = 2400
     const exportHeight = 3000
 
-    // Tempoarily force the 3D Engine to render at a higher resolution for the snapshot
+    // Temporarily force the 3D Engine to render at a higher resolution
     camera.aspect = exportWidth / exportHeight
     camera.updateProjectionMatrix()
 
-    renderer.setPixelRatio(1) // Reset pixel ratio to 1 for consistent export quality
+    renderer.setPixelRatio(1)
     renderer.setSize(exportWidth, exportHeight, false)
 
     const exportRenderTarget = new THREE.WebGLRenderTarget(exportWidth, exportHeight, { samples: 0 })
-
     const originalTarget = composer.renderTarget1
+    
     composer.reset(exportRenderTarget)
     composer.setSize(exportWidth, exportHeight)
 
+    // 2. Render synchronously and immediately read the pixels
+    composer.render()
+    const imageURL = renderer.domElement.toDataURL('image/png')
 
-    setTimeout(() => {
-      // Render the scene at the higher resolution
-      composer.render()
+    // 3. Trigger download
+    const link = document.createElement('a')
+    link.href = imageURL
+    link.download = 'studio-render-4K.png'
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
 
-      // Take the latest frame from the renderer and convert it to a data URL
-      const imageURL = renderer.domElement.toDataURL('image/png')
+    // 4. Restore original state
+    camera.aspect = currentAspect
+    camera.updateProjectionMatrix()
+    renderer.setPixelRatio(currentPixelRatio)
+    composer.setSize(currentWidth, currentHeight)
+    renderer.setSize(currentWidth, currentHeight)
 
-      // Create a temporary link element to trigger the download
-      const link = document.createElement('a')
-      link.href = imageURL
-      link.download = 'studio-render-4K.png'
+    composer.reset(originalTarget)
+    composer.setSize(currentWidth, currentHeight)
+    exportRenderTarget.dispose()
 
-      // Click the link to trigger the download
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-
-      // Restore the original camera aspect ratio and renderer size
-      camera.aspect = currentAspect
-      camera.updateProjectionMatrix()
-      renderer.setPixelRatio(currentPixelRatio)
-      composer.setSize(currentWidth, currentHeight)
-      renderer.setSize(currentWidth, currentHeight)
-
-      composer.reset(originalTarget)
-      composer.setSize(currentWidth, currentHeight)
-
-      exportRenderTarget.dispose()
-
-    }, 150) // Delay to ensure the renderer has time to update before taking the snapshot
+    // 5. Resume the animation loop instantly
+    renderer.setAnimationLoop(animate)
   }
 }
 
