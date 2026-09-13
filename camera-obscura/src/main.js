@@ -1143,6 +1143,7 @@ window.addEventListener('resize', () => {
 
 // --- Viewfinder Overlay ---
 const viewfinder = document.createElement('div')
+viewfinder.id = 'viewfinder'
 viewfinder.style.position = 'absolute'
 viewfinder.style.top = '50%'
 viewfinder.style.left = '50%'
