@@ -1,7 +1,5 @@
-// Import Statements
 
 import * as THREE from 'three'
-// import GUI from 'lil-gui'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
@@ -9,28 +7,17 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
 import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js'
-import { depth, roughness } from 'three/src/nodes/TSL.js'
-
-// Scene and Camera
 const scene = new THREE.Scene()
 scene.background = new THREE.Color('#0f0f0f')
 scene.fog = new THREE.Fog('#0f0f0f', 25, 70)
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
-
-// --- HDRI Environment (Global Reflections) ---
 const exrLoader = new EXRLoader()
 
 exrLoader.load('/studio.exr', (environmentMap) => {
-  // Wraps the flat image into a 360 degree sphere
   environmentMap.mapping = THREE.EquirectangularReflectionMapping
-
-  // Makes all current and future models reflect it
   scene.environment = environmentMap
-
-  // Global Multiplier for reflection brightness
   scene.environmentIntensity = 0.2
 })
-// Setting up the camera position
 camera.position.set(0, 0, 5)
 
 const lightColors = {
@@ -38,16 +25,6 @@ const lightColors = {
   fill: '#ffffff',
   rim: '#ffffff'
 }
-
-
-// --- GUI Controls ---
-// Initialize new GUI
-// const gui = new GUI()
-
-// const cameraGui = new GUI({ title: 'Camera Module' })
-// cameraGui.hide() // Hide the camera GUI by default, but keep it accessible for future use
-
-// Canvas and Renderer
 const canvas = document.querySelector('#myCanvas');
 const renderer = new THREE.WebGLRenderer({ canvas: canvas, preserveDrawingBuffer: true, antialias: true })
 
@@ -57,19 +34,11 @@ renderer.setSize(window.innerWidth, window.innerHeight, false)
 renderer.setPixelRatio(renderScale())
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFShadowMap
-
-// --- SENSOR OPTICS ---
-// Processes raw 3D light using the ACES Filmic color science standard
 renderer.toneMapping = THREE.ACESFilmicToneMapping
 renderer.toneMappingExposure = 1.0 // Base exposure, which we will dynamically control
-
-// --- GPU CONTEXT LOSS RECOVERY ---
 canvas.addEventListener('webglcontextlost', (event) => {
-  // Prevent the browser from permanently disabling the canvas
   event.preventDefault()
   console.error('CRITICAL! WebGL Context Lost. GPU disconnected ot crashed.')
-
-  // Fallback
   window.location.reload()
 }, false)
 
@@ -81,8 +50,6 @@ canvas.addEventListener('webglcontextrestored', () => {
   composer.setPixelRatio(pixelRatio)
   composer.setSize(window.innerWidth, window.innerHeight)
 }, false)
-
-// Post-processing (Lens Optics)
 const pixelRatio = renderScale()
 
 const rendertarget = new THREE.WebGLRenderTarget(
@@ -94,12 +61,8 @@ const composer = new EffectComposer(renderer, rendertarget)
 
 composer.setPixelRatio(pixelRatio)
 composer.setSize(window.innerWidth, window.innerHeight)
-
-// Draw the base 3D Scene
 const renderPass = new RenderPass(scene, camera)
 composer.addPass(renderPass)
-
-// Apply a bokeh effect to simulate depth of field
 const bokehPass = new BokehPass(scene, camera, {
   focus: 4.5,
   aperture: 0.000,
@@ -108,36 +71,19 @@ const bokehPass = new BokehPass(scene, camera, {
   height: window.innerHeight * pixelRatio
 })
 composer.addPass(bokehPass)
-
-// Output the final rendered image to the screen
 const outputPass = new OutputPass()
 composer.addPass(outputPass)
-
-// Orbit Controls
 const controls = new OrbitControls(camera, renderer.domElement)
 controls.enableDamping = true
 controls.dampingFactor = 0.05
 controls.screenSpacePanning = false
 controls.enablePan = false
-
-// VERTICAL LOCKS (Y-Axis)
-// Prevents camera from dipping below the floor (with a 0.05 buffer to prevent clipping)
 controls.maxPolarAngle = Math.PI / 2 - 0.05
-// Prevents camera from going perfectly top-down and flipping the axis
 controls.minPolarAngle = 0.1
-
-// HORIZONTAL LOCKS (X/Z-Axis)
-// Clamps the left/right orbit so you can never swing outside the 3 walls
 controls.minAzimuthAngle = -Math.PI / 2.5 // Left wall limit
 controls.maxAzimuthAngle = Math.PI / 2.5  // Right wall limit
-
-// ZOOM LOCKS
 controls.maxDistance = 14; // Prevents zooming backwards out of the studio walls
 controls.minDistance = 2;  // Prevents zooming directly through the 3D model
-
-// --- Lighting ---
-
-// Main Light
 const color = 0xFFFFFF
 const intensity = 230
 const light = new THREE.SpotLight(color, intensity)
@@ -146,54 +92,33 @@ light.angle = Math.PI / 6
 light.penumbra = 0.5
 light.decay = 2
 light.castShadow = true;
-
-// --- SHADOW ACNE FIX ---
-// Upgrade from the default 512x512 shadow map to a crisp 2K map
 light.shadow.mapSize.width = 2048;
 light.shadow.mapSize.height = 2048;
-
-// Nudge the shadow math slightly beneath the surface to stop the parallel lines
 light.shadow.bias = -0.0001;
-
-// Smooth the shadow map calculations specifically along curved surfaces (like car fenders)
 light.shadow.normalBias = 0.02;
 
 scene.add(light)
-
-// Fill Light
 const fillLight = new THREE.SpotLight(0xFFFFFF, 226)
 fillLight.position.set(-3, 3, -3)
 fillLight.angle = Math.PI / 4
 fillLight.penumbra = 0.8
 fillLight.decay = 2
 scene.add(fillLight)
-
-// Light Helper for main light
 const lightHelper = new THREE.SpotLightHelper(light)
 scene.add(lightHelper)
-
-// Light Helper for fill light
 const fillLightHelper = new THREE.SpotLightHelper(fillLight)
-
-// Shadow Acne & Resolution Fix
 fillLight.shadow.mapSize.width = 2048;
 fillLight.shadow.mapSize.height = 2048;
 fillLight.shadow.bias = -0.0001;
 fillLight.shadow.normalBias = 0.02;
 
 scene.add(fillLightHelper)
-
-
-
-// --- Rim Light (Kicker / Hair Light) ---
 const rimLight = new THREE.SpotLight(0xFFFFFF, 350)
 rimLight.position.set(0, 5, -6)
 rimLight.angle = Math.PI / 5
 rimLight.penumbra = 0.5
 rimLight.decay = 2
 rimLight.castShadow = true
-
-// Shadow Acne & Resolution Fix
 rimLight.shadow.mapSize.width = 2048;
 rimLight.shadow.mapSize.height = 2048;
 rimLight.shadow.bias = -0.0001;
@@ -203,57 +128,30 @@ scene.add(rimLight)
 const rimLightHelper = new THREE.SpotLightHelper(rimLight)
 
 scene.add(rimLightHelper)
-
-
-// ---PRACTICAL SOFTBOXES---
-
-// Creating a reusable shape for the softboxes
 const softboxGeometry = new THREE.BoxGeometry(1, 1, 0.1)
 const keysoftboxMaterial = new THREE.MeshBasicMaterial({ color: lightColors.key })
 const fillsoftboxMaterial = new THREE.MeshBasicMaterial({ color: lightColors.fill })
-
-// Key Light Softbox
 const keySoftbox = new THREE.Mesh(softboxGeometry, keysoftboxMaterial)
 scene.add(keySoftbox)
-
-// Fill Light Softbox
 const fillSoftbox = new THREE.Mesh(softboxGeometry, fillsoftboxMaterial)
 scene.add(fillSoftbox)
-
-// Rim Light Softbox
 const rimSoftboxMaterial = new THREE.MeshBasicMaterial({ color: lightColors.rim })
 const rimSoftbox = new THREE.Mesh(softboxGeometry, rimSoftboxMaterial)
 scene.add(rimSoftbox)
-
-// --- 3D Objects ---
-
-// Initialize the GLTFLoader to load 3D models
 const loader = new GLTFLoader()
-
-// Global variable to hold the loaded subject
 let subject
-
-// --- 3D Uploader & Memory Manager ---
-
-// Create a hidden file input locked to modern 3D web formats
 const fileInput = document.createElement('input')
 fileInput.type = 'file'
 fileInput.accept = '.glb, .gltf'
 fileInput.style.display = 'none'
 document.body.appendChild(fileInput)
-
-// Memory Cleanup Function
 function disposeCurrentSubject() {
   if (!subject) return
 
   scene.remove(subject)
-
-  // Traverse the old model and delete data from GPU
   subject.traverse((child) => {
     if (child.isMesh) {
       child.geometry.dispose()
-
-      // Delete Materials and Textures
       if (child.material) {
         if (Array.isArray(child.material)) {
           child.material.forEach(mat => mat.dispose());
@@ -264,27 +162,15 @@ function disposeCurrentSubject() {
     }
   })
 }
-
-// The File Parser
 fileInput.addEventListener('change', (e) => {
   const file = e.target.files[0]
   if (!file) return
-
-  // Read the file as binary data
   const reader = new FileReader()
   reader.onload = (e) => {
     const arrayBuffer = e.target.result
-
-    // Parse the data into a Three.js scene
     loader.parse(arrayBuffer, '', (gltf) => {
-
-      // Delete the old model to prevent crashes
       disposeCurrentSubject()
-
-      // Assign the new model to the scene
       subject = gltf.scene
-
-      // Re apply shadow and depth for the studio
       subject.traverse((child) => {
         if (child.isMesh) {
           child.castShadow = true
@@ -296,36 +182,21 @@ fileInput.addEventListener('change', (e) => {
           child.material.depthWrite = true
         }
       })
-
-
-      // Reset the scale and position to the center of the studio
       subject.scale.set(11, 11, 11)
       subject.position.set(0, -0.5, 0)
 
       scene.add(subject)
-
-
-      // Point the lights back at the target
       light.target = subject
       fillLight.target = subject
       rimLight.target = subject
     })
   }
   reader.readAsArrayBuffer(file)
-
-  // Clear the input after loading
   fileInput.value = ''
 })
 
-const modelActions = {
-  uploadModel: () => fileInput.click()
-}
-
-
 loader.load('model.glb', (gltf) => {
   subject = gltf.scene
-
-  // Traverse the subject's children to enable shadows for all meshes
   subject.traverse((child) => {
     if (child.isMesh) {
       child.castShadow = true
@@ -337,61 +208,15 @@ loader.load('model.glb', (gltf) => {
       child.material.depthWrite = true
     }
   })
-
-  // Scale and position the subject
   subject.scale.set(11, 11, 11)
   subject.position.set(0, -0.5, 0)
 
   scene.add(subject)
-
-  // Update the light targets to point to the subject
   light.target = subject
   fillLight.target = subject
 
 })
-
-  // Add GUI controls for scaling the 3D model
-//   const modelFolder = gui.addFolder('3D Model Setup')
-
-//   // 3D Model Upload Button
-//   modelFolder.add(modelActions, 'uploadModel').name('UPLOAD .GLB / .GLTF')
-
-//   modelFolder.add(subject.scale, 'x', 0.1, 100).name('Scale Model').onChange((val) => {
-//     subject.scale.set(val, val, val)
-//   })
-
-//   // Allows you to nudge the camera up or down until it touches the floor
-//   modelFolder.add(subject.position, 'y', -5, 5).name('Height Offset');
-
-
-
-// })
-
-
-// // Adding a sphere to the scene
-// const geometry = new THREE.SphereGeometry(1, 128, 128)
-// const material = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 })
-// const sphere = new THREE.Mesh(geometry, material)
-// scene.add(sphere)
-// sphere.castShadow = true;
-
-// Adding a plane to the scene
-// const planeSize = 200
-// const planeGeometry = new THREE.PlaneGeometry(planeSize, planeSize)
-// const planeMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.8 })
-// const mesh = new THREE.Mesh(planeGeometry, planeMaterial)
-// mesh.rotation.x = -Math.PI / 2
-// mesh.position.y = -1
-// scene.add(mesh)
-// mesh.receiveShadow = true;
-
-// --- Changing the plane into a Cyclorama (Cyc Wall) ---
-
-// We're forming a J shape
-
-// --- The Seamless Cyclrorama ---
 function createCycloramaGeometry() {
-  // We start with a massive, high-resolution flat plane
   const planeWidth = 120 // Increased from 60 to push the side walls infinitely wide
   const planeDepth = 80  // Increased from 40 to push the back wall infinitely high
   const geo = new THREE.PlaneGeometry(planeWidth, planeDepth, 128, 128)
@@ -404,8 +229,6 @@ function createCycloramaGeometry() {
   for (let i = 0; i < pos.count; i++) {
     const u = pos.getX(i)
     const v = pos.getY(i)
-
-    // Calculate distance from the flat floor boundary
     let dx = 0
     let dy = 0
 
@@ -413,24 +236,18 @@ function createCycloramaGeometry() {
     else if (u < -floorHalfWidth) dx = u + floorHalfWidth
 
     if (v > floorBack) dy = v - floorBack // Only curve the back wall, not the front
-
-    // Euclidean distance from the boundary (This is what rounds the corners)
     const d = Math.sqrt(dx * dx + dy * dy)
-
-    // The closest point on the flat boundary
     const uFlat = u - dx
     const vFlat = v - dy
 
     let finalX, finalY, finalZ
 
     if (d === 0) {
-      // 1. Flat Floor
       finalX = u
       finalY = -1
       finalZ = -v
 
     } else if (d <= radius) {
-      // 2. Smooth Sweeping Cove (Floor to Wall & Wall to Wall)
       const theta = (d / radius) * (Math.PI / 2)
       const travel = radius * Math.sin(theta)
       const height = radius * (1 - Math.cos(theta))
@@ -440,7 +257,6 @@ function createCycloramaGeometry() {
       finalZ = -(vFlat + (dy / d) * travel)
 
     } else {
-      // 3. Vertical Walls
       const height = radius + (d - radius)
       const travel = radius
 
@@ -467,57 +283,6 @@ const cycMaterial = new THREE.MeshStandardMaterial({
 const cyclorama = new THREE.Mesh(cycGeometry, cycMaterial)
 cyclorama.receiveShadow = true
 scene.add(cyclorama)
-
-// const cycGeometry = createCycloramaGeometry()
-// const cycMaterial = new THREE.MeshStandardMaterial({
-//   color: 0x8a2020, // Rich studio paper base
-//   roughness: 0.85,  // Matte paper finish
-//   metalness: 0.05,
-//   side: THREE.DoubleSide
-// })
-
-// const cyclorama = new THREE.Mesh(cycGeometry, cycMaterial)
-// cyclorama.position.set(0, 0, 0)
-// cyclorama.receiveShadow = true
-// scene.add(cyclorama)
-
-// // The 2D profile of the backdrop
-// const sweepProfile = new THREE.Shape()
-// sweepProfile.moveTo(0, 20) // The point at the top of the J
-// sweepProfile.lineTo(0, 2) // Drawing the stem of the J
-// sweepProfile.quadraticCurveTo(0, 0, 2, 0) // Drawing the smooth J Curve
-// sweepProfile.lineTo(30, 0) // The flat floor
-
-// // Extrude settings for the extrusion
-// const extrudeSettings = {
-//   steps: 1,
-//   depth: 40,
-//   bevelEnabled: false,
-//   curveSegments: 64 // High res so the curve gradients are smooth
-// }
-
-// const cycGeometry = new THREE.ExtrudeGeometry(sweepProfile, extrudeSettings)
-
-// // The finish of the cyc
-// const cycMaterial = new THREE.MeshStandardMaterial({
-//   color: 0x222222,
-//   roughness: 0.9, // Matte
-//   metalness: 0.0
-// })
-
-// const cyclorama = new THREE.Mesh(cycGeometry, cycMaterial)
-// cyclorama.receiveShadow = true
-
-// // Positioning the cyc behind the subject
-// cyclorama.rotation.y = -Math.PI / 2
-// cyclorama.position.set(20, -1, -5)
-
-// scene.add(cyclorama)
-
-
-
-
-// --- A working Camera ---
 const cameraActions = {
   takeSnapshot: () => {
     renderer.setAnimationLoop(null)
@@ -526,8 +291,6 @@ const cameraActions = {
     const currentHeight = window.innerHeight
     const currentAspect = camera.aspect
     const currentPixelRatio = renderer.getPixelRatio()
-
-    // Dynamically cap export size for mobile GPUs to prevent memory crashes
     const isMobile = window.innerWidth < 768
     const exportWidth = isMobile ? currentWidth * 2 : 2400
     const exportHeight = isMobile ? currentHeight * 2 : 3000
@@ -538,13 +301,8 @@ const cameraActions = {
     renderer.setPixelRatio(1)
     renderer.setSize(exportWidth, exportHeight, false)
     composer.setSize(exportWidth, exportHeight)
-
-    // CRITICAL FIX: Give the mobile GPU 100ms to allocate the new canvas size before taking the picture
     setTimeout(() => {
-      // Render directly to the canvas buffer
       composer.render()
-      
-      // Read the physical canvas
       const imageURL = renderer.domElement.toDataURL('image/png', 1.0)
 
       const link = document.createElement('a')
@@ -553,8 +311,6 @@ const cameraActions = {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-
-      // Restore state
       camera.aspect = currentAspect
       camera.updateProjectionMatrix()
       renderer.setPixelRatio(currentPixelRatio)
@@ -565,20 +321,6 @@ const cameraActions = {
     }, 100)
   }
 }
-
-
-
-
-// --- Camera Lens Controls ---
-// const cameraFolder = cameraGui.addFolder('Lens Optics / Depth of Field')
-// cameraFolder.add(bokehPass.uniforms.focus, 'value', 0.0, 20).name('Focus Distance')
-// cameraFolder.add(bokehPass.uniforms.aperture, 'value', 0.0, 0.05).name('Aperture (f-stop)')
-// cameraFolder.add(bokehPass.uniforms.maxblur, 'value', 0.0, 0.02).name('Max Blur Radius')
-
-// // Add a button to the GUI for taking snapshots
-// cameraGui.add(cameraActions, 'takeSnapshot').name('Take Snapshot');
-
-// Default Lens Settings
 const lensState = {
   fStop: 2.8, // Aperture
   focusDistance: 4.5,
@@ -587,8 +329,6 @@ const lensState = {
   iso: 400,          // Base ISO
   shutterSpeed: 0.01 // Base Shutter Speed (1/100th of a second)
 }
-
-// --- CUSTOM GLASSMORPHISM CAMERA UI ---
 const glassUIHTML = `
   <div id="camera-glass-ui" class="camera-glass-deck">
     <div class="lens-controls">
@@ -638,8 +378,6 @@ const glassUIHTML = `
   </div>
 `
 document.body.insertAdjacentHTML('beforeend', glassUIHTML)
-
-// Define the DOM elements
 const glassDeck = document.getElementById('camera-glass-ui')
 const uiFocal = document.getElementById('ui-focal')
 const uiAperture = document.getElementById('ui-aperture')
@@ -647,8 +385,6 @@ const uiShutter = document.getElementById('ui-shutter')
 const uiIso = document.getElementById('ui-iso')
 const uiAf = document.getElementById('ui-af')
 const uiShutterBtn = document.getElementById('ui-shutter-btn')
-
-// Wire the inputs to the Three.js physics engine
 uiFocal.addEventListener('input', (e) => {
   const val = parseFloat(e.target.value)
   lensState.focalLength = val
@@ -683,108 +419,24 @@ uiAf.addEventListener('change', (e) => {
   lensState.afGrid = e.target.checked
   afGrid.style.display = lensState.afGrid ? 'block' : 'none'
 })
-
-// Bind the circular shutter button to the hi-res snapshot function
 uiShutterBtn.addEventListener('click', cameraActions.takeSnapshot)
-
-// Match the shader settings with the settings we provide
 bokehPass.uniforms.focus.value = lensState.focusDistance
 bokehPass.uniforms.aperture.value = 1 / (lensState.fStop * 16.66)
 camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * lensState.focalLength)))
 camera.updateProjectionMatrix()
-
-// --- OPTICS ENGINE: DYNAMIC DEPTH OF FIELD --
-// I figured that I'd rather mathematically control the amount of bokeh in the backend
 function updateDepthOfField() {
-  // Calculate the physical aperture diameter in millimeters (f / N)
   const physicalAperture = lensState.focalLength / lensState.fStop
-
-  // Blur scales inversely with focus distance (closer focus = massive background blur)
   const blurIntensity = (physicalAperture / lensState.focusDistance) * 0.0008
-
-  // Clamp the maximum WebGL blur radius to prevent GPU artifacting (0.0 to 0.04)
   const dynamicMaxBlur = Math.max(0.00, Math.min(blurIntensity, 0.04))
-
-  // Feed the calculated physics into the shader
   bokehPass.uniforms.maxblur.value = dynamicMaxBlur
 }
-
-// Run it once on startup to set the baseline
 updateDepthOfField()
-
-
-// --- OPTICS ENGINE: EXPOSURE TRIANGLE ---
 function updateExposure() {
-  // The physical formula for light gathered by a sensor: (ISO/100) * ShutterSpeed / Aperture^2
-  // We multiply by 196 as our base calibration constant so that 
-  // f/2.8, 1/100s, at ISO 400 produces a perfectly balanced exposure of 1.0
   const lightGathered = (lensState.iso / 100) * lensState.shutterSpeed / Math.pow(lensState.fStop, 2)
   renderer.toneMappingExposure = lightGathered * 196
 }
-
-// Run it once on startup
 updateExposure()
-
-
-
-
-// --- Camera Lens Controls ---
-// const cameraFolder = cameraGui.addFolder('Lens Optics / Depth of Field')
-
-// // Zoom Rocker
-// cameraFolder.add(lensState, 'focalLength', 12, 200).name('Focal Length (mm)').onChange((val) => {
-//   // Translate mm back into Three.js FOV degrees
-//   camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * val)));
-//   camera.updateProjectionMatrix();
-//   updateDepthOfField()
-//   updateHUD()
-// })
-
-// // Focus Distance
-// cameraFolder.add(lensState, 'focusDistance', 0.1, 20).name('Focus Distance (m)').onChange((val) => {
-//   bokehPass.uniforms.focus.value = val;
-//   updateDepthOfField()
-//   updateHUD()
-// }).listen()
-
-// // Aperture (Real f-stops)
-// cameraFolder.add(lensState, 'fStop', 1.2, 22).name('Aperture (f-stop)').onChange((val) => {
-//   // Translates the f-stop (e.g., 2.8) back into the microscopic decimal (e.g., 0.021) for WebGL
-//   bokehPass.uniforms.aperture.value = 1 / (val * 16.66);
-//   updateDepthOfField()
-//   updateExposure()
-//   updateHUD()
-// })
-
-// // Shutter Speed (Dropdown Menu)
-// const shutterSpeeds = {
-//   '1/8000': 1/8000, '1/4000': 1/4000, '1/2000': 1/2000, '1/1000': 1/1000,
-//   '1/500': 1/500, '1/250': 1/250, '1/125': 1/125, '1/100': 1/100, '1/60': 1/60,
-//   '1/30': 1/30, '1/15': 1/15, '1/8': 1/8, '1/4': 1/4, '1/2': 1/2, '1"': 1
-// }
-
-// cameraFolder.add(lensState, 'shutterSpeed', shutterSpeeds).name('Shutter Speed').onChange(() => {
-//   updateExposure()
-//   updateHUD()
-// })
-
-// // ISO (Standard Stops)
-// cameraFolder.add(lensState, 'iso', [100, 200, 400, 800, 1600, 3200, 6400]).name('ISO').onChange(() => {
-//   updateExposure()
-//   updateHUD()
-// })
-
-// cameraFolder.add(lensState, 'afGrid').name('DSLR AF Grid').onChange((val) => {
-//   afGrid.style.display = val ? 'block' : 'none'
-// })
-
-// // Add a button to the GUI for taking snapshots
-// cameraGui.add(cameraActions, 'takeSnapshot').name('TAKE PHOTO');
-
-// --- Application Controls & Mobile UI ---
 let isCameraMode = false
-
-// --- CUSTOM GLASSMORPHISM STUDIO UI ---
 const studioUIHTML = `
   <div id="studio-sidebar" class="studio-sidebar">
     <div class="tabs">
@@ -854,8 +506,6 @@ const studioUIHTML = `
 document.body.insertAdjacentHTML('beforeend', studioUIHTML)
 
 const studioSidebar = document.getElementById('studio-sidebar')
-
-// --- TAB LOGIC ---
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
@@ -871,8 +521,6 @@ const turntableState = {
   autoSpin: false,
   speed: 0.5
 }
-
-// --- WIRING THE CONTROLS ---
 document.getElementById('ui-upload').addEventListener('click', () => fileInput.click())
 document.getElementById('ui-scale').addEventListener('input', (e) => { if (subject) subject.scale.setScalar(e.target.value) })
 document.getElementById('ui-height').addEventListener('input', (e) => { if (subject) subject.position.y = e.target.value })
@@ -915,8 +563,6 @@ document.getElementById('ui-cyc-color').addEventListener('input', (e) => cycMate
 document.getElementById('ui-cyc-rough').addEventListener('input', (e) => cycMaterial.roughness = e.target.value)
 document.getElementById('ui-amb-int').addEventListener('input', (e) => ambientBounce.intensity = e.target.value)
 document.getElementById('ui-hdri-int').addEventListener('input', (e) => scene.environmentIntensity = e.target.value)
-
-// --- UNIFIED UI TOGGLES ---
 const uiTogglesHTML = `
   <div id="camera-toggle" class="glass-btn">📷</div>
   <div id="sidebar-toggle" class="glass-btn">
@@ -980,8 +626,6 @@ window.addEventListener('keydown', (event) => {
     toggleCameraMode()
   }
 })
-
-// --- Window Resize Handling ---
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
@@ -993,8 +637,6 @@ window.addEventListener('resize', () => {
   composer.setPixelRatio(pr)
   composer.setSize(window.innerWidth, window.innerHeight)
 })
-
-// --- Viewfinder Overlay ---
 const viewfinder = document.createElement('div')
 viewfinder.id = 'viewfinder'
 viewfinder.style.position = 'absolute'
@@ -1012,8 +654,6 @@ viewfinder.style.backgroundImage = `
 viewfinder.style.pointerEvents = 'none'
 viewfinder.style.display = 'none'
 document.body.appendChild(viewfinder)
-
-// --- HUD ---
 const hud = document.createElement('div')
 hud.style.position = 'absolute'
 hud.style.top = '40px'
@@ -1033,8 +673,6 @@ function updateHUD() {
 
   hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso}`
 }
-
-// --- AUTOFOCUS HUD INTERFACE ---
 const focusBox = document.createElement('div')
 focusBox.style.position = 'fixed'
 focusBox.style.width = '30px'
@@ -1074,8 +712,6 @@ afPointOffsets.forEach(offset => {
   pt.style.transform = 'translate(-50%, -50%)'
   afGrid.appendChild(pt)
 })
-
-// Raycaster: Click-To-Focus
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
 let mouseDownPos = new THREE.Vector2()
@@ -1155,8 +791,6 @@ window.addEventListener('pointerup', (e) => {
     focusBox.style.opacity = '0'
   }, 1500)
 })
-
-// Rendering the scene
 function animate(time) {
   controls.update()
 
