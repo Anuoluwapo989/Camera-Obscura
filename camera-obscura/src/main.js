@@ -50,11 +50,11 @@ const lightColors = {
 // Canvas and Renderer
 const canvas = document.querySelector('#myCanvas');
 const renderer = new THREE.WebGLRenderer({ canvas: canvas, preserveDrawingBuffer: true, antialias: true })
-renderer.setSize(window.innerWidth, window.innerHeight)
-renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-const initialCanvasRect = canvas.getBoundingClientRect()
-camera.aspect = initialCanvasRect.width / initialCanvasRect.height
-camera.updateProjectionMatrix()
+
+const renderScale = () => Math.min(window.devicePixelRatio || 1, 2)
+
+renderer.setSize(window.innerWidth, window.innerHeight, false)
+renderer.setPixelRatio(renderScale())
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFShadowMap
 
@@ -75,20 +75,25 @@ canvas.addEventListener('webglcontextlost', (event) => {
 
 canvas.addEventListener('webglcontextrestored', () => {
   console.log('WebGL Context Restored. Rebuilding graohics pipeline...')
-  renderer.setSize(window.innerWidth, window.innerHeight)
-  composer.setSize(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio)
+  const pixelRatio = renderScale()
+  renderer.setPixelRatio(pixelRatio)
+  renderer.setSize(window.innerWidth, window.innerHeight, false)
+  composer.setPixelRatio(pixelRatio)
+  composer.setSize(window.innerWidth, window.innerHeight)
 }, false)
 
 // Post-processing (Lens Optics)
-const pixelRatio = Math.min(window.devicePixelRatio, 2)
+const pixelRatio = renderScale()
+
 const rendertarget = new THREE.WebGLRenderTarget(
   window.innerWidth * pixelRatio,
   window.innerHeight * pixelRatio,
-  { samples: 4 })
+  { samples: 4 }
+)
 const composer = new EffectComposer(renderer, rendertarget)
 
-composer.setPixelRatio(1)
-composer.setSize(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio)
+composer.setPixelRatio(pixelRatio)
+composer.setSize(window.innerWidth, window.innerHeight)
 
 // Draw the base 3D Scene
 const renderPass = new RenderPass(scene, camera)
@@ -776,26 +781,8 @@ updateExposure()
 // // Add a button to the GUI for taking snapshots
 // cameraGui.add(cameraActions, 'takeSnapshot').name('TAKE PHOTO');
 
-
 // --- Application Controls & Mobile UI ---
 let isCameraMode = false
-
-// 1. Create a floating UI Button
-const modeButton = document.createElement('button')
-modeButton.innerText = '📷'
-modeButton.style.position = 'absolute'
-modeButton.style.top = '15px'
-modeButton.style.left = '15px'
-modeButton.style.padding = '10px 15px'
-modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
-modeButton.style.color = '#ffffff'
-modeButton.style.border = '1px solid #444'
-modeButton.style.borderRadius = '5px'
-modeButton.style.fontFamily = 'monospace'
-modeButton.style.cursor = 'pointer'
-modeButton.style.zIndex = '1000' // Keeps it on top of the canvas
-document.body.appendChild(modeButton)
-
 
 // --- CUSTOM GLASSMORPHISM STUDIO UI ---
 const studioUIHTML = `
@@ -868,36 +855,24 @@ document.body.insertAdjacentHTML('beforeend', studioUIHTML)
 
 const studioSidebar = document.getElementById('studio-sidebar')
 
-// --- SIDEBAR TOGGLE LOGIC ---
-const toggleBtnHTML = `<div id="sidebar-toggle" class="sidebar-toggle"><img src = '/settings.svg' width = 40%></div>`
-document.body.insertAdjacentHTML('beforeend', toggleBtnHTML)
-
-const sidebarToggle = document.getElementById('sidebar-toggle')
-
-// Start closed on mobile, open on desktop
-let isSidebarOpen = window.innerWidth >= 768 
-studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
-
-sidebarToggle.addEventListener('click', () => {
-  isSidebarOpen = !isSidebarOpen
-  studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
-})
-
 // --- TAB LOGIC ---
 document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
-    // Remove active class from all tabs and contents
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
     
-    // Add active class to clicked tab
     e.target.classList.add('active')
     document.getElementById(e.target.dataset.tab).classList.add('active')
   })
 })
 
+const turntableState = {
+  rotation: 0,
+  autoSpin: false,
+  speed: 0.5
+}
+
 // --- WIRING THE CONTROLS ---
-// Subject
 document.getElementById('ui-upload').addEventListener('click', () => fileInput.click())
 document.getElementById('ui-scale').addEventListener('input', (e) => { if (subject) subject.scale.setScalar(e.target.value) })
 document.getElementById('ui-height').addEventListener('input', (e) => { if (subject) subject.position.y = e.target.value })
@@ -905,7 +880,10 @@ document.getElementById('ui-spin-angle').addEventListener('input', (e) => { if (
 document.getElementById('ui-auto-spin').addEventListener('change', (e) => turntableState.autoSpin = e.target.checked)
 document.getElementById('ui-spin-speed').addEventListener('input', (e) => turntableState.speed = parseFloat(e.target.value))
 
-// Lighting
+const lightHelperToggle = { showHelper: true }
+const fillLightHelperToggle = { showHelper: true }
+const rimLightHelperToggle = { showHelper: true }
+
 document.getElementById('ui-key-int').addEventListener('input', (e) => light.intensity = e.target.value)
 document.getElementById('ui-key-color').addEventListener('input', (e) => { light.color.set(e.target.value); keysoftboxMaterial.color.set(e.target.value) })
 document.getElementById('ui-key-help').addEventListener('change', (e) => lightHelperToggle.showHelper = e.target.checked)
@@ -918,23 +896,41 @@ document.getElementById('ui-rim-int').addEventListener('input', (e) => rimLight.
 document.getElementById('ui-rim-color').addEventListener('input', (e) => { rimLight.color.set(e.target.value); rimSoftboxMaterial.color.set(e.target.value) })
 document.getElementById('ui-rim-help').addEventListener('change', (e) => rimLightHelperToggle.showHelper = e.target.checked)
 
-// Stage
 document.getElementById('ui-cyc-color').addEventListener('input', (e) => cycMaterial.color.set(e.target.value))
 document.getElementById('ui-cyc-rough').addEventListener('input', (e) => cycMaterial.roughness = e.target.value)
 document.getElementById('ui-amb-int').addEventListener('input', (e) => ambientBounce.intensity = e.target.value)
 document.getElementById('ui-hdri-int').addEventListener('input', (e) => scene.environmentIntensity = e.target.value)
 
-// The universal toggle logic
+// --- UNIFIED UI TOGGLES ---
+const uiTogglesHTML = `
+  <div id="camera-toggle" class="glass-btn">📷</div>
+  <div id="sidebar-toggle" class="glass-btn">
+     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.8;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+  </div>
+`
+document.body.insertAdjacentHTML('beforeend', uiTogglesHTML)
+
+const cameraToggle = document.getElementById('camera-toggle')
+const sidebarToggle = document.getElementById('sidebar-toggle')
+
+let isSidebarOpen = window.innerWidth >= 768 
+studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
+
+sidebarToggle.addEventListener('click', () => {
+  isSidebarOpen = !isSidebarOpen
+  studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
+})
+
 function toggleCameraMode() {
   isCameraMode = !isCameraMode
   if (isCameraMode) {
-    // gui.hide()
-    glassDeck.style.display = 'flex' // Reveal the custom glass UI
+    glassDeck.style.display = 'flex'
     studioSidebar.style.display = 'none'
+    sidebarToggle.style.display = 'none'
     viewfinder.style.display = 'block'
     
-    modeButton.innerText = '✖'
-    modeButton.style.backgroundColor = 'rgba(138, 32, 32, 0.8)'
+    cameraToggle.innerText = '✖'
+    cameraToggle.classList.add('active')
     
     updateHUD()
 
@@ -945,13 +941,13 @@ function toggleCameraMode() {
     fillSoftbox.visible = false
     rimSoftbox.visible = false
   } else {
-    // gui.show()
-    glassDeck.style.display = 'none' // Hide the custom glass UI
-    studioSidebar.style.display = 'block'
+    glassDeck.style.display = 'none'
+    sidebarToggle.style.display = 'flex'
+    studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
     viewfinder.style.display = 'none'
     
-    modeButton.innerText = '📷'
-    modeButton.style.backgroundColor = 'rgba(20, 20, 20, 0.8)'
+    cameraToggle.innerText = '📷'
+    cameraToggle.classList.remove('active')
 
     lightHelper.visible = lightHelperToggle.showHelper
     fillLightHelper.visible = fillLightHelperToggle.showHelper
@@ -962,8 +958,7 @@ function toggleCameraMode() {
   }
 }
 
-// 3. Bind it to BOTH the button click and the keyboard shortcuts
-modeButton.addEventListener('click', toggleCameraMode)
+cameraToggle.addEventListener('click', toggleCameraMode)
 
 window.addEventListener('keydown', (event) => {
   if ((event.key === 'c' || event.key === 'C') && !isCameraMode) {
@@ -973,170 +968,17 @@ window.addEventListener('keydown', (event) => {
   }
 })
 
-// Folder to keep UI organized
-// const lightFolder = gui.addFolder('Key Light Setup')
-
-// // Bind sliders to light position
-// lightFolder.add(light.position, 'x', -10, 10).name('Position X').onChange(() => lightHelper.update())
-// lightFolder.add(light.position, 'y', 0, 10).name('Position Y').onChange(() => lightHelper.update())
-// lightFolder.add(light.position, 'z', -10, 10).name('Position Z').onChange(() => lightHelper.update())
-
-// // Bind a slider to light intensity
-// lightFolder.add(light, 'intensity', 0, 1000).name('Intensity')
-
-// // Unified Key Light Color Picker
-// lightFolder.addColor(lightColors, 'key').name('Gel Color').onChange((value) => {
-//   light.color.set(value);
-//   keysoftboxMaterial.color.set(value);
-//   lightHelper.update();
-// });
-
-// // The Photography Controls
-// lightFolder.add(light, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => lightHelper.update())
-// lightFolder.add(light, 'penumbra', 0, 1).name('Penumbra').onChange(() => lightHelper.update())
-
-// // Helper toggle for main light
-// const lightHelperToggle = { showHelper: true }
-// lightFolder.add(lightHelperToggle, 'showHelper').name('Show Key Light Helper').onChange((value) => {
-//   lightHelper.visible = value
-// })
-
-
-// // Folders remain open by default for easy access to controls
-// lightFolder.open()
-
-
-// // Controls for the fill light
-// const fillLightFolder = gui.addFolder('Fill Light Setup')
-
-// // Bind sliders to fill light position
-// fillLightFolder.add(fillLight.position, 'x', -10, 10).name('Position X').onChange(() => fillLightHelper.update())
-// fillLightFolder.add(fillLight.position, 'y', 0, 10).name('Position Y').onChange(() => fillLightHelper.update())
-// fillLightFolder.add(fillLight.position, 'z', -10, 10).name('Position Z').onChange(() => fillLightHelper.update())
-
-// // Bind a slider to fill light intensity
-// fillLightFolder.add(fillLight, 'intensity', 0, 1000).name('Intensity')
-
-// // Helper toggle for fill light
-// const fillLightHelperToggle = { showHelper: true }
-// fillLightFolder.add(fillLightHelperToggle, 'showHelper').name('Show Fill Light Helper').onChange((value) => {
-//   fillLightHelper.visible = value
-// })
-
-// // The Photography Controls
-// fillLightFolder.add(fillLight, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => fillLightHelper.update())
-// fillLightFolder.add(fillLight, 'penumbra', 0, 1).name('Penumbra').onChange(() => fillLightHelper.update())
-
-// // Unified Fill Light Color Picker
-// fillLightFolder.addColor(lightColors, 'fill').name('Gel Color').onChange((value) => {
-//   fillLight.color.set(value);
-//   fillsoftboxMaterial.color.set(value);
-//   fillLightHelper.update();
-// });
-
-// // Folders kept closed by default to avoid cluttering the UI
-// fillLightFolder.close()
-
-
-
-// --- Rim Light GUI ---
-// const rimLightFolder = gui.addFolder('Rim / Hair Light Setup')
-// rimLightFolder.add(rimLight.position, 'x', -10, 10).name('Position X').onChange(() => rimLightHelper.update())
-// rimLightFolder.add(rimLight.position, 'y', 0, 15).name('Position Y').onChange(() => rimLightHelper.update())
-// rimLightFolder.add(rimLight.position, 'z', -15, 10).name('Position Z').onChange(() => rimLightHelper.update())
-// rimLightFolder.add(rimLight, 'intensity', 0, 1000).name('Intensity')
-// rimLightFolder.add(rimLight, 'angle', 0.1, Math.PI / 2).name('Beam Angle').onChange(() => rimLightHelper.update())
-// rimLightFolder.add(rimLight, 'penumbra', 0, 1).name('Penumbra').onChange(() => rimLightHelper.update())
-
-// rimLightFolder.addColor(lightColors, 'rim').name('Gel Color').onChange((value) => {
-//   rimLight.color.set(value);
-//   rimSoftboxMaterial.color.set(value);
-//   rimLightHelper.update();
-// });
-
-// const rimLightHelperToggle = { showHelper: true }
-// rimLightFolder.add(rimLightHelperToggle, 'showHelper').name('Show Rim Light Helper').onChange((val) => rimLightHelper.visible = val)
-// rimLightFolder.close()
-
-// --- Turntable GUI ---
-const turntableState = {
-  rotation: 0,
-  autoSpin: false,
-  speed: 0.5
-}
-
-// const turntableFolder = gui.addFolder('Subject Turntable')
-// // Modifying the proxy state instead of the raw subject preserves the UI when uploading new files
-// turntableFolder.add(turntableState, 'rotation', 0, 360).name('Manual Angle').onChange((val) => {
-//   if (subject && !turntableState.autoSpin) {
-//     subject.rotation.y = THREE.MathUtils.degToRad(val)
-//   }
-// }).listen()
-// turntableFolder.add(turntableState, 'autoSpin').name('Motorized Spin')
-// turntableFolder.add(turntableState, 'speed', 0.1, 5).name('Spin Speed')
-// turntableFolder.open()
-
-
-
-// --- Cyclorama GUI Controls ---
-// const cycFolder = gui.addFolder('Cyclorama Backdrop')
-
-// Holds default cyc color
-const cycState = {
-  color: '#990a00'
-}
-
-// cycFolder.addColor(cycState, 'color').name('Paper Color').onChange((val) => {
-//   // Updates the seamless color based on user input
-//   cycMaterial.color.set(val)
-
-//   // // By matching the background and fog, it appears to be infinite
-//   // scene.background.set(val)
-//   // scene.fog.color.set(val)
-// })
-
-// cycFolder.add(cycMaterial, 'roughness', 0, 1).name('Surface Roughness')
-// cycFolder.add(cycMaterial, 'metalness', 0, 1).name('Surface Reflection')
-
-// cycFolder.open()
-// --- SUBJECT MATERIAL CONTROLS ---
-
-// const materialFolder = gui.addFolder('Subject Surface')
-
-// materialFolder.add(material, 'roughness', 0, 1).name('Roughness')
-// materialFolder.add(material, 'metalness', 0, 1).name('Metalness')
-
-// --- AMBIENT BOUNCE LIGHT ---
-// THREE.HemisphereLight( skyColor, groundColor, intensity )
-// Using a dim grey for the room ambient, and a slightly brighter grey bouncing up from the floor
-const ambientBounce = new THREE.HemisphereLight(0x111111, 0x444444, 0.5)
-scene.add(ambientBounce)
-
-// --- AMBIENT CONTROLS ---
-// const ambientFolder = gui.addFolder('Ambient / Floor Bounce');
-// ambientFolder.add(ambientBounce, 'intensity', 0, 5).name('Bounce Intensity');
-// ambientFolder.addColor({ sky: '#111111' }, 'sky').name('Sky Ambient').onChange((val) => ambientBounce.color.set(val));
-// ambientFolder.addColor({ ground: '#444444' }, 'ground').name('Floor Bounce').onChange((val) => ambientBounce.groundColor.set(val));
-
-// ambientFolder.add(scene, 'environmentIntensity', 0, 3).name('HDRI Reflection Strength')
-
-// // Close the ambient folder by default to keep the UI clean
-// ambientFolder.close()
-
 // --- Window Resize Handling ---
 window.addEventListener('resize', () => {
-  // Update the camera's aspect ratio and projection matrix to match the new window dimensions
-  const canvasRect = canvas.getBoundingClientRect()
-  camera.aspect = canvasRect.width / canvasRect.height
+  camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
 
-  // Update the renderer size and pixel ratio to match the new window dimensions
-  renderer.setSize(window.innerWidth, window.innerHeight)
+  const pr = renderScale()
+  renderer.setPixelRatio(pr)
+  renderer.setSize(window.innerWidth, window.innerHeight, false)
 
-  const pixelRatio = Math.min(window.devicePixelRatio, 2)
-  renderer.setPixelRatio(pixelRatio)
-
-  composer.setSize(window.innerWidth * pixelRatio, window.innerHeight * pixelRatio)
+  composer.setPixelRatio(pr)
+  composer.setSize(window.innerWidth, window.innerHeight)
 })
 
 // --- Viewfinder Overlay ---
@@ -1146,22 +988,16 @@ viewfinder.style.position = 'absolute'
 viewfinder.style.top = '50%'
 viewfinder.style.left = '50%'
 viewfinder.style.transform = 'translate(-50%, -50%)'
-
-// locks the frame to a 4:5 aspect ratio, which is the standard for portrait photography
 viewfinder.style.aspectRatio = '4 / 5'
 viewfinder.style.height = '85vh'
-
-// Darkens the area outside the viewfinder to help the user focus on the subject
 viewfinder.style.boxShadow = '0 0 0 9999px rgba(0, 0, 0, 0.75)'
 viewfinder.style.border = '2px solid rgba(255, 255, 255, 0.5)'
-
-// Rules of thirds grid overlay for better composition
 viewfinder.style.backgroundImage = `
   linear-gradient(to right, transparent 33.3%, rgba(255,255,255,0.2) 33.3%, rgba(255,255,255,0.2) 33.5%, transparent 33.5%, transparent 66.6%, rgba(255,255,255,0.2) 66.6%, rgba(255,255,255,0.2) 66.8%, transparent 66.8%),
   linear-gradient(to bottom, transparent 33.3%, rgba(255,255,255,0.2) 33.3%, rgba(255,255,255,0.2) 33.5%, transparent 33.5%, transparent 66.6%, rgba(255,255,255,0.2) 66.6%, rgba(255,255,255,0.2) 66.8%, transparent 66.8%)
 `
 viewfinder.style.pointerEvents = 'none'
-viewfinder.style.display = 'none' // Hide the viewfinder by default; it will be shown when entering camera mode
+viewfinder.style.display = 'none'
 document.body.appendChild(viewfinder)
 
 // --- HUD ---
@@ -1170,107 +1006,84 @@ hud.style.position = 'absolute'
 hud.style.top = '40px'
 hud.style.left = '50%'
 hud.style.transform = 'translateX(-50%)'
-hud.style.color = '#00ff00' // Green for the text like a DSLR
+hud.style.color = '#00ff00'
 hud.style.fontFamily = "'CustomDigitalFont', monospace";
 hud.style.fontSize = '20px'
 hud.style.letterSpacing = '1px'
-// hud.style.textShadow = '1px 1px 2px rgba(0,0,0,0.8)'
 viewfinder.appendChild(hud)
 
 function updateHUD() {
-  // Read directly from the proxy state
   const focalLength = Math.round(lensState.focalLength);
   const fStop = lensState.fStop.toFixed(1);
   const focusDist = lensState.focusDistance.toFixed(1);
-
-  // Format the shutter speed for the display
   const ssDisplay = lensState.shutterSpeed >= 1 ? '1"' : `1/${Math.round(1 / lensState.shutterSpeed)}`
 
-  // Inject the expanded readout into the HUD
   hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso}`
-
 }
 
 // --- AUTOFOCUS HUD INTERFACE ---
-// The Active Focus Box (Hollow Rectangle)
 const focusBox = document.createElement('div')
-focusBox.style.position = 'absolute'
+focusBox.style.position = 'fixed'
 focusBox.style.width = '30px'
 focusBox.style.height = '30px'
 focusBox.style.border = '1px solid rgba(255, 255, 255, 0.8)'
-focusBox.style.transform = 'translate(-54%, -56%)' // Centers the box on the click coordinate, found these number to look more centered than -50,-50
+focusBox.style.boxSizing = 'border-box'
+focusBox.style.transform = 'translate(-50%, -50%)' // PERFECT MATHEMATICAL CENTER FIXES RAYCASTER
 focusBox.style.pointerEvents = 'none'
-focusBox.style.opacity = '0' // Hidden until you click
+focusBox.style.opacity = '0'
 focusBox.style.transition = 'border-color 0.1s, opacity 0.2s'
-viewfinder.appendChild(focusBox)
+focusBox.style.zIndex = '9999'
+document.body.appendChild(focusBox)
 
-// The DSLR Multi-Point Grid Container
 const afGrid = document.createElement('div')
 afGrid.style.position = 'absolute'
 afGrid.style.width = '100%'
 afGrid.style.height = '100%'
 afGrid.style.pointerEvents = 'none'
-afGrid.style.display = 'none' // Hidden by default, toggled via GUI
+afGrid.style.display = 'none'
 viewfinder.appendChild(afGrid)
 
-// Generate the 15-point diamond layout
 const afPointOffsets = [
-  [0, 0], // Center
-  [-10, 0], [-20, 0], [-30, 0], // Left side
-  [10, 0], [20, 0], [30, 0],    // Right side
-  [-10, -12], [0, -12], [10, -12], // Top Mid Row
-  [-10, 12], [0, 12], [10, 12],    // Bottom Mid Row
-  [0, -24], // Top Far
-  [0, 24]   // Bottom Far
+  [0, 0], [-10, 0], [-20, 0], [-30, 0], [10, 0], [20, 0], [30, 0],
+  [-10, -12], [0, -12], [10, -12], [-10, 12], [0, 12], [10, 12],
+  [0, -24], [0, 24]
 ]
 
-// Draws the static LCD dots
 afPointOffsets.forEach(offset => {
   const pt = document.createElement('div')
   pt.style.position = 'absolute'
   pt.style.width = '6px'
   pt.style.height = '6px'
-  pt.style.border = '1px solid rgba(20, 20, 20, 0.9)' // Dark inner border
-  pt.style.outline = '1px solid rgba(255, 255, 255, 0.6)' // Bright outer border
+  pt.style.border = '1px solid rgba(20, 20, 20, 0.9)'
+  pt.style.outline = '1px solid rgba(255, 255, 255, 0.6)'
   pt.style.left = `calc(50% + ${offset[0]}%)`
   pt.style.top = `calc(50% + ${offset[1]}%)`
   pt.style.transform = 'translate(-50%, -50%)'
   afGrid.appendChild(pt)
 })
 
-
-// Raycaster: Click-To-Focus in the camera module
+// Raycaster: Click-To-Focus
 const raycaster = new THREE.Raycaster()
 const mouse = new THREE.Vector2()
 let mouseDownPos = new THREE.Vector2()
 
-// Record where the mouse clicks down on
 window.addEventListener('pointerdown', (e) => {
   mouseDownPos.set(e.clientX, e.clientY)
 })
 
-// Trigger focus on release of mouse
-// Avoids drag from being rergistered as a click or tap
 window.addEventListener('pointerup', (e) => {
-
-  // Calculates the length of the hypotenuse betwen the distance travelled by the mouse in the X and Y plane
-  // If > 5 pixels, they are orbiting, not clicking
   const distance = Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y)
   if (distance > 5) return
-
-  // You can only rack focus while looking through the viewfinder
   if (!isCameraMode) return
 
   const vfRect = viewfinder.getBoundingClientRect()
 
-  // Real cameras don't focus if you click outside the physical frame
   if (e.clientX < vfRect.left || e.clientX > vfRect.right ||
     e.clientY < vfRect.top || e.clientY > vfRect.bottom) return
 
   let targetPixelX = e.clientX
   let targetPixelY = e.clientY
 
-  // If the Grid is ON, mathematically snap the click to the nearest AF dot
   if (lensState.afGrid) {
     const clickPctX = ((e.clientX - (vfRect.left + vfRect.width / 2)) / vfRect.width) * 100
     const clickPctY = ((e.clientY - (vfRect.top + vfRect.height / 2)) / vfRect.height) * 100
@@ -1286,90 +1099,44 @@ window.addEventListener('pointerup', (e) => {
       }
     })
 
-    // Convert the snapped percentage back to exact screen pixels for the Raycaster
     targetPixelX = vfRect.left + vfRect.width / 2 + (nearestPoint[0] * vfRect.width / 100)
     targetPixelY = vfRect.top + vfRect.height / 2 + (nearestPoint[1] * vfRect.height / 100)
   }
 
-  //Move the visual HUD box to the target
-  const boxX = targetPixelX - vfRect.left
-  const boxY = targetPixelY - vfRect.top
-  focusBox.style.left = `${boxX}px`
-  focusBox.style.top = `${boxY}px`
+  focusBox.style.left = `${targetPixelX}px`
+  focusBox.style.top = `${targetPixelY}px`
   focusBox.style.opacity = '1'
-  focusBox.style.borderColor = 'rgba(255, 255, 255, 0.8)' // Reset to white initially
+  focusBox.style.borderColor = 'rgba(255, 255, 255, 0.8)'
 
-  // Convert screen coordinates using the canvas bounds, not the window bounds.
-  // This keeps the ray aligned when the canvas is scaled or offset by responsive UI.
   const canvasRect = canvas.getBoundingClientRect()
-  if (canvasRect.width === 0 || canvasRect.height === 0) return
+  if (targetPixelX < canvasRect.left || targetPixelX > canvasRect.right ||
+    targetPixelY < canvasRect.top || targetPixelY > canvasRect.bottom) return
 
   mouse.x = ((targetPixelX - canvasRect.left) / canvasRect.width) * 2 - 1
   mouse.y = -((targetPixelY - canvasRect.top) / canvasRect.height) * 2 + 1
   raycaster.setFromCamera(mouse, camera)
 
-  camera.updateMatrixWorld()
+  const objectsToTest = subject ? [subject, cyclorama] : [cyclorama]
+  const intersects = raycaster.intersectObjects(objectsToTest, true)
 
-  let hitPoint = null
-  if (subject) {
-    const subjectIntersects = raycaster.intersectObject(subject, true)
-    if (subjectIntersects.length > 0) {
-      hitPoint = subjectIntersects[0].point
-    } else {
-      // A distant subject can be smaller than a pixel or two. Use its projected
-      // bounds as a forgiving autofocus target before falling back to the floor.
-      const subjectBounds = new THREE.Box3().setFromObject(subject)
-      const subjectSphere = subjectBounds.getBoundingSphere(new THREE.Sphere())
-      const projectedCenter = subjectSphere.center.clone().project(camera)
-      const projectedEdge = subjectSphere.center.clone()
-        .add(new THREE.Vector3(subjectSphere.radius, 0, 0))
-        .project(camera)
-      const projectedRadiusX = Math.abs(projectedEdge.x - projectedCenter.x) * canvasRect.width / 2
-      const projectedCenterX = canvasRect.left + (projectedCenter.x + 1) * canvasRect.width / 2
-      const projectedCenterY = canvasRect.top + (1 - projectedCenter.y) * canvasRect.height / 2
-      const distanceToSubject = Math.hypot(targetPixelX - projectedCenterX, targetPixelY - projectedCenterY)
-
-      if (distanceToSubject <= Math.max(projectedRadiusX, 12)) {
-        hitPoint = raycaster.ray.intersectSphere(subjectSphere, new THREE.Vector3())
-      }
-    }
-  }
-
-  if (!hitPoint) {
-    const backdropIntersects = raycaster.intersectObject(cyclorama, true)
-    if (backdropIntersects.length > 0) hitPoint = backdropIntersects[0].point
-  }
-
-  if (hitPoint) {
-
-    // --- Optical Planar Math ---
-    // 1. Get the direction the camera lens is physically pointing
+  if (intersects.length > 0) {
+    const hitPoint = intersects[0].point
     const cameraDirection = new THREE.Vector3()
     camera.getWorldDirection(cameraDirection)
-
-    // 2. Draw a line from the camera to the clicked object
     const hitVector = new THREE.Vector3().subVectors(hitPoint, camera.position)
-
-    // 3. Project that line onto the camera's forward direction to get the exact flat focal plane distance
     const focusDist = Math.abs(hitVector.dot(cameraDirection))
 
-    // Update state
     lensState.focusDistance = focusDist
     bokehPass.uniforms.focus.value = focusDist
 
-    // Recalculate dynamic blur based on the accurate plane distance
     updateDepthOfField()
-
     updateHUD()
 
-    // AF CONFIRMATION: Flash sharp green
     setTimeout(() => { focusBox.style.borderColor = '#00ff00' }, 50)
   } else {
-    // AF FAILURE: Flash red if it fired into the infinite void
     setTimeout(() => { focusBox.style.borderColor = '#ff0000' }, 50)
   }
 
-  // Fade the box back out after 1.5 seconds like a real LCD
   clearTimeout(focusBox.timeout)
   focusBox.timeout = setTimeout(() => {
     focusBox.style.opacity = '0'
@@ -1390,8 +1157,6 @@ function animate(time) {
     lightHelper.update()
     fillLightHelper.update()
 
-
-    // Snap the softbox positions to the lights
     keySoftbox.position.copy(light.position)
     keySoftbox.lookAt(light.target.position)
 
@@ -1407,10 +1172,4 @@ function animate(time) {
   }
 }
 
-
 renderer.setAnimationLoop(animate)
-
-// if (window.innerWidth < 768) {
-//   // gui.close() // Start the main menu closed on phones
-//   // cameraFolder.close()
-// }
