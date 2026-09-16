@@ -884,17 +884,32 @@ const lightHelperToggle = { showHelper: true }
 const fillLightHelperToggle = { showHelper: true }
 const rimLightHelperToggle = { showHelper: true }
 
+function syncHelperVisibility() {
+  lightHelper.visible = !isCameraMode && lightHelperToggle.showHelper
+  fillLightHelper.visible = !isCameraMode && fillLightHelperToggle.showHelper
+  rimLightHelper.visible = !isCameraMode && rimLightHelperToggle.showHelper
+}
+
 document.getElementById('ui-key-int').addEventListener('input', (e) => light.intensity = e.target.value)
 document.getElementById('ui-key-color').addEventListener('input', (e) => { light.color.set(e.target.value); keysoftboxMaterial.color.set(e.target.value) })
-document.getElementById('ui-key-help').addEventListener('change', (e) => lightHelperToggle.showHelper = e.target.checked)
+document.getElementById('ui-key-help').addEventListener('change', (e) => {
+  lightHelperToggle.showHelper = e.target.checked
+  syncHelperVisibility()
+})
 
 document.getElementById('ui-fill-int').addEventListener('input', (e) => fillLight.intensity = e.target.value)
 document.getElementById('ui-fill-color').addEventListener('input', (e) => { fillLight.color.set(e.target.value); fillsoftboxMaterial.color.set(e.target.value) })
-document.getElementById('ui-fill-help').addEventListener('change', (e) => fillLightHelperToggle.showHelper = e.target.checked)
+document.getElementById('ui-fill-help').addEventListener('change', (e) => {
+  fillLightHelperToggle.showHelper = e.target.checked
+  syncHelperVisibility()
+})
 
 document.getElementById('ui-rim-int').addEventListener('input', (e) => rimLight.intensity = e.target.value)
 document.getElementById('ui-rim-color').addEventListener('input', (e) => { rimLight.color.set(e.target.value); rimSoftboxMaterial.color.set(e.target.value) })
-document.getElementById('ui-rim-help').addEventListener('change', (e) => rimLightHelperToggle.showHelper = e.target.checked)
+document.getElementById('ui-rim-help').addEventListener('change', (e) => {
+  rimLightHelperToggle.showHelper = e.target.checked
+  syncHelperVisibility()
+})
 
 document.getElementById('ui-cyc-color').addEventListener('input', (e) => cycMaterial.color.set(e.target.value))
 document.getElementById('ui-cyc-rough').addEventListener('input', (e) => cycMaterial.roughness = e.target.value)
@@ -949,9 +964,7 @@ function toggleCameraMode() {
     cameraToggle.innerText = '📷'
     cameraToggle.classList.remove('active')
 
-    lightHelper.visible = lightHelperToggle.showHelper
-    fillLightHelper.visible = fillLightHelperToggle.showHelper
-    rimLightHelper.visible = rimLightHelperToggle.showHelper
+    syncHelperVisibility()
     keySoftbox.visible = true
     fillSoftbox.visible = true
     rimSoftbox.visible = true
