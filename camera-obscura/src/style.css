@@ -1,9 +1,48 @@
+:root {
+  --bg-deep: #1a1a1a;
+  --bg-canvas: #0f0f0f;
+  --bg-glow: rgba(255, 255, 255, 0.04);
+  --panel-bg: rgba(15, 15, 15, 0.42);
+  --panel-bg-strong: rgba(20, 20, 20, 0.7);
+  --panel-border: rgba(255, 255, 255, 0.15);
+  --panel-border-soft: rgba(255, 255, 255, 0.12);
+  --panel-border-faint: rgba(255, 255, 255, 0.08);
+  --text: #ffffff;
+  --text-soft: rgba(255, 255, 255, 0.8);
+  --text-muted: rgba(255, 255, 255, 0.7);
+  --text-dim: rgba(255, 255, 255, 0.45);
+  --accent: rgba(138, 32, 32, 0.9);
+  --accent-border: rgba(255, 100, 100, 0.45);
+  --range-track: rgba(255, 255, 255, 0.18);
+  --range-thumb: #ffffff;
+  --shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 6px 18px rgba(0, 0, 0, 0.26);
+  --shadow-sm: 0 4px 15px rgba(0, 0, 0, 0.3);
+  --button-size: 44px;
+  --button-size-small: 40px;
+  --shutter-size: 64px;
+  --shutter-inner-size: 48px;
+  --sidebar-width: 320px;
+  --sidebar-top: 75px;
+  --sidebar-right: 20px;
+  --control-gap: 30px;
+  --panel-radius: 40px;
+  --panel-radius-large: 90px;
+  --input-radius: 15px;
+  --input-radius-small: 12px;
+  --pill-radius: 999px;
+  --panel-padding: 36px;
+  --panel-padding-mobile: 18px;
+  --page-padding: 20px;
+  --font-main: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+
 body {
   margin: 0;
   overflow: hidden;
   background:
-    radial-gradient(circle at top, rgba(255,255,255,0.04), transparent 30%),
-    #1a1a1a;
+    radial-gradient(circle at top, var(--bg-glow), transparent 30%),
+    var(--bg-deep);
   touch-action: none;
 }
 
@@ -12,26 +51,26 @@ canvas {
   width: 100vw;
   height: 100vh;
   touch-action: none;
+  background: var(--bg-canvas);
 }
-
 
 .glass-btn {
   position: absolute;
-  width: 44px;
-  height: 44px;
+  width: var(--button-size);
+  height: var(--button-size);
   border-radius: 50%;
-  background: rgba(20, 20, 20, 0.7);
+  background: var(--panel-bg);
   -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: white;
+  border: 1px solid var(--panel-border-soft);
+  color: var(--text);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 2001;
   font-size: 20px;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.26);
+  box-shadow: var(--shadow-md);
   transition: transform 0.12s ease, background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
@@ -43,25 +82,29 @@ canvas {
   transform: scale(0.96);
 }
 
+.glass-btn img {
+  filter: brightness(0) invert(1);
+}
+
 #sidebar-toggle {
-  top: 20px;
-  right: 20px;
+  top: var(--page-padding);
+  right: var(--page-padding);
 }
 
 #camera-toggle {
-  top: 20px;
-  left: 20px;
+  top: var(--page-padding);
+  left: var(--page-padding);
 }
 
 #camera-toggle.active {
-  background: rgba(138, 32, 32, 0.9);
-  border-color: rgba(255, 100, 100, 0.45);
+  background: var(--accent);
+  border-color: var(--accent-border);
   box-shadow: 0 8px 20px rgba(138, 32, 32, 0.25);
 }
 
 .camera-glass-deck {
   position: absolute;
-  bottom: 20px;
+  bottom: var(--page-padding);
   left: 50%;
   transform: translateX(-50%);
   width: 90%;
@@ -69,19 +112,19 @@ canvas {
   max-height: calc(100dvh - 40px);
   box-sizing: border-box;
   overflow-y: auto;
-  background: rgba(15, 15, 15, 0.42);
+  background: var(--panel-bg);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
-  border-radius: 90px;
-  padding: 36px 36px;
+  border-radius: var(--panel-radius-large);
+  padding: var(--panel-padding);
   display: none;
   align-items: center;
   justify-content: space-between;
   gap: 30px;
   z-index: 2000;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: white;
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-main);
+  color: var(--text);
 }
 
 .lens-controls {
@@ -94,26 +137,23 @@ canvas {
 .control-row {
   display: flex;
   align-items: center;
-  gap: 30px;
+  gap: var(--control-gap);
 }
 
 .control-row label {
   font-size: 13px;
   font-weight: 300;
-  
-  
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--text-muted);
   width: 65px;
 }
-
 
 input[type=range] {
   -webkit-appearance: none;
   appearance: none;
   flex-grow: 1;
   height: 3px;
-  background: rgba(255, 255, 255, 0.18);
-  border-radius: 999px;
+  background: var(--range-track);
+  border-radius: var(--pill-radius);
   outline: none;
 }
 
@@ -122,21 +162,20 @@ input[type=range]::-webkit-slider-thumb {
   width: 13px;
   height: 13px;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--range-thumb);
   border: 2px solid rgba(0, 0, 0, 0.3);
   box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.12);
   cursor: pointer;
 }
 
-
 select {
   background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: white;
+  border: 1px solid var(--panel-border-soft);
+  color: var(--text);
   padding: 6px 10px;
-  border-radius: 15px;
+  border-radius: var(--input-radius);
   font-size: 13px;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-main);
   font-weight: 300;
   letter-spacing: 0.5px;
   outline: none;
@@ -145,8 +184,7 @@ select {
 
 select option {
   background-color: rgba(255, 255, 255, 0.1);
-  color: #fff;
-
+  color: var(--text);
 }
 
 .toggle-row {
@@ -155,15 +193,14 @@ select option {
   gap: 8px;
   font-size: 12px;
   font-weight: 400;
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--text-soft);
   margin-top: 5px;
   margin-bottom: 5px;
 }
 
-
 .shutter-btn {
-  width: 64px;
-  height: 64px;
+  width: var(--shutter-size);
+  height: var(--shutter-size);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.08);
   border: 2px solid rgba(255, 255, 255, 0.8);
@@ -173,7 +210,7 @@ select option {
   cursor: pointer;
   flex-shrink: 0;
   transition: transform 0.12s ease, border-color 0.2s ease, box-shadow 0.2s ease;
-  box-shadow: inset 0 1px 0 rgba(255,255,255,0.12);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .shutter-btn:hover {
@@ -185,8 +222,8 @@ select option {
 }
 
 .shutter-inner {
-  width: 48px;
-  height: 48px;
+  width: var(--shutter-inner-size);
+  height: var(--shutter-inner-size);
   border-radius: 50%;
   background: rgba(255, 255, 255, 0.96);
   transition: background 0.1s ease;
@@ -196,58 +233,54 @@ select option {
   background: #dcdcdc;
 }
 
-
-
 .studio-sidebar {
   position: absolute;
-  top: 75px;
-  right: 20px;
-  width: 320px;
+  top: var(--sidebar-top);
+  right: var(--sidebar-right);
+  width: var(--sidebar-width);
   max-height: calc(100dvh - 95px);
   box-sizing: border-box;
   overflow-y: auto;
   background: rgba(15, 15, 15, 0.4);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  border-radius: 40px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--panel-radius);
   padding: 30px;
   padding-top: 40px;
   padding-bottom: 45px;
   z-index: 1000;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-  color: white;
+  box-shadow: var(--shadow-lg);
+  font-family: var(--font-main);
+  color: var(--text);
   transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
-
 .sidebar-toggle {
   position: absolute;
-  top: 20px;
-  right: 20px;
-  width: 44px;
-  height: 44px;
+  top: var(--page-padding);
+  right: var(--page-padding);
+  width: var(--button-size);
+  height: var(--button-size);
   border-radius: 50%;
   background: rgba(15, 15, 15, 0.4);
   -webkit-backdrop-filter: blur(24px);
   backdrop-filter: blur(24px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  color: white;
+  border: 1px solid var(--panel-border);
+  color: var(--text);
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   z-index: 1001;
   font-size: 20px;
-  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-sm);
   transition: transform 0.1s ease;
 }
 
 .sidebar-toggle:active {
   transform: scale(0.9);
 }
-
 
 .studio-sidebar::-webkit-scrollbar {
   width: 4px;
@@ -258,18 +291,17 @@ select option {
   border-radius: 3px;
 }
 
-
 .tabs {
   display: flex;
   margin-bottom: 20px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--panel-border-faint);
 }
 
 .tab-btn {
   flex: 1;
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.45);
+  color: var(--text-dim);
   font-size: 12px;
   font-weight: 500;
   cursor: pointer;
@@ -278,11 +310,9 @@ select option {
 }
 
 .tab-btn.active {
-  color: white;
+  color: var(--text);
   border-bottom: 2px solid rgba(255, 255, 255, 0.82);
-  background: rgba(255, 255, 255, 0.02);
 }
-
 
 .tab-content {
   display: none;
@@ -293,7 +323,6 @@ select option {
 .tab-content.active {
   display: flex;
 }
-
 
 .control-group {
   display: flex;
@@ -313,8 +342,8 @@ select option {
 
 .upload-btn {
   background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: white;
+  border: 1px solid var(--panel-border-soft);
+  color: var(--text);
   padding: 12px;
   border-radius: 40px;
   font-size: 13px;
@@ -330,14 +359,13 @@ select option {
   transform: translateY(-1px);
 }
 
-
 input[type=color] {
   -webkit-appearance: none;
   appearance: none;
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  border: 1px solid var(--panel-border-soft);
   width: 75%;
   height: 28px;
-  border-radius: 14px;
+  border-radius: var(--input-radius-small);
   cursor: pointer;
   background: rgba(255, 255, 255, 0.04);
   padding: 0;
@@ -349,10 +377,9 @@ input[type=color]::-webkit-color-swatch-wrapper {
 }
 
 input[type=color]::-webkit-color-swatch {
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 12px;
+  border: transparent;
+  border-radius: var(--input-radius-small);
 }
-
 
 @media (max-width: 900px) {
   .studio-sidebar {
@@ -399,8 +426,8 @@ input[type=color]::-webkit-color-swatch {
   .sidebar-toggle {
     top: 10px;
     right: 10px;
-    width: 40px;
-    height: 40px;
+    width: var(--button-size-small);
+    height: var(--button-size-small);
   }
 
   .tabs {
@@ -448,7 +475,7 @@ input[type=color]::-webkit-color-swatch {
     align-items: stretch;
     flex-direction: column;
     gap: 18px;
-    padding: 18px;
+    padding: var(--panel-padding-mobile);
     border-radius: 26px;
   }
 
@@ -467,7 +494,6 @@ input[type=color]::-webkit-color-swatch {
     height: 42px;
   }
 
-  
   #viewfinder {
     height: min(78vh, calc(100vw * 1.25)) !important;
     max-height: calc(100vh - 24px);

@@ -30,8 +30,31 @@ const renderer = new THREE.WebGLRenderer({ canvas: canvas, preserveDrawingBuffer
 
 const renderScale = () => Math.min(window.devicePixelRatio || 1, 2)
 
-renderer.setSize(window.innerWidth, window.innerHeight, false)
-renderer.setPixelRatio(renderScale())
+function resizeStage() {
+  const width = window.innerWidth
+  const height = window.innerHeight
+
+  canvas.style.position = 'fixed'
+  canvas.style.left = '0'
+  canvas.style.top = '0'
+  canvas.style.width = `${width}px`
+  canvas.style.height = `${height}px`
+  canvas.style.maxWidth = '100vw'
+  canvas.style.maxHeight = '100vh'
+  canvas.style.transform = 'none'
+
+  const pixelRatio = renderScale()
+  camera.aspect = width / height
+  camera.updateProjectionMatrix()
+  renderer.setPixelRatio(pixelRatio)
+  renderer.setSize(width, height, false)
+
+  if (typeof composer !== 'undefined') {
+    composer.setPixelRatio(pixelRatio)
+    composer.setSize(width, height)
+  }
+}
+
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
@@ -44,11 +67,7 @@ canvas.addEventListener('webglcontextlost', (event) => {
 
 canvas.addEventListener('webglcontextrestored', () => {
   console.log('WebGL Context Restored. Rebuilding graohics pipeline...')
-  const pixelRatio = renderScale()
-  renderer.setPixelRatio(pixelRatio)
-  renderer.setSize(window.innerWidth, window.innerHeight, false)
-  composer.setPixelRatio(pixelRatio)
-  composer.setSize(window.innerWidth, window.innerHeight)
+  resizeStage()
 }, false)
 const pixelRatio = renderScale()
 
@@ -59,6 +78,7 @@ const rendertarget = new THREE.WebGLRenderTarget(
 )
 const composer = new EffectComposer(renderer, rendertarget)
 
+resizeStage()
 composer.setPixelRatio(pixelRatio)
 composer.setSize(window.innerWidth, window.innerHeight)
 const renderPass = new RenderPass(scene, camera)
@@ -567,15 +587,28 @@ document.getElementById('ui-cyc-rough').addEventListener('input', (e) => cycMate
 document.getElementById('ui-amb-int').addEventListener('input', (e) => ambientBounce.intensity = e.target.value)
 document.getElementById('ui-hdri-int').addEventListener('input', (e) => scene.environmentIntensity = e.target.value)
 const uiTogglesHTML = `
-  <div id="camera-toggle" class="glass-btn">📷</div>
-  <div id="sidebar-toggle" class="glass-btn">
-     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.8;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+  <div id="camera-toggle" class="glass-btn">
+    <img src="/camera.svg" alt="Camera" width="22" height="22">
   </div>
+  <div id="sidebar-toggle" class="glass-btn">
+     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.8;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+    </div>
+`
+
+const cameraIconSvg = `
+  <img src="/camera.svg" alt="Camera" width="22" height="22">
+`
+
+const closeIconSvg = `
+  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" style="opacity: 0.9;">
+    <path d="M6 6l12 12M18 6L6 18"></path>
+  </svg>
 `
 document.body.insertAdjacentHTML('beforeend', uiTogglesHTML)
 
 const cameraToggle = document.getElementById('camera-toggle')
 const sidebarToggle = document.getElementById('sidebar-toggle')
+sidebarToggle.innerHTML = '<img src="/settings.svg" alt="Settings" width="22" height="22">'
 
 let isSidebarOpen = window.innerWidth >= 768 
 studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
@@ -593,7 +626,7 @@ function toggleCameraMode() {
     sidebarToggle.style.display = 'none'
     viewfinder.style.display = 'block'
     
-    cameraToggle.innerText = '✖'
+    cameraToggle.innerHTML = closeIconSvg
     cameraToggle.classList.add('active')
     
     updateHUD()
@@ -610,7 +643,7 @@ function toggleCameraMode() {
     studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
     viewfinder.style.display = 'none'
     
-    cameraToggle.innerText = '📷'
+    cameraToggle.innerHTML = cameraIconSvg
     cameraToggle.classList.remove('active')
 
     syncHelperVisibility()
@@ -629,17 +662,7 @@ window.addEventListener('keydown', (event) => {
     toggleCameraMode()
   }
 })
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight
-  camera.updateProjectionMatrix()
-
-  const pr = renderScale()
-  renderer.setPixelRatio(pr)
-  renderer.setSize(window.innerWidth, window.innerHeight, false)
-
-  composer.setPixelRatio(pr)
-  composer.setSize(window.innerWidth, window.innerHeight)
-})
+window.addEventListener('resize', resizeStage)
 const viewfinder = document.createElement('div')
 viewfinder.id = 'viewfinder'
 viewfinder.style.position = 'absolute'
@@ -677,7 +700,7 @@ function updateHUD() {
   hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso}`
 }
 const focusBox = document.createElement('div')
-focusBox.style.position = 'absolute'
+focusBox.style.position = 'fixed'
 focusBox.style.width = '30px'
 focusBox.style.height = '30px'
 focusBox.style.border = '1px solid rgba(255, 255, 255, 0.8)'
@@ -687,7 +710,7 @@ focusBox.style.pointerEvents = 'none'
 focusBox.style.opacity = '0'
 focusBox.style.transition = 'border-color 0.1s, opacity 0.2s'
 focusBox.style.zIndex = '9999'
-viewfinder.appendChild(focusBox)
+document.body.appendChild(focusBox)
 
 const afGrid = document.createElement('div')
 afGrid.style.position = 'absolute'
