@@ -706,7 +706,7 @@ focusBox.style.transform = 'translate(-50%, -50%)'
 focusBox.style.pointerEvents = 'none'
 focusBox.style.opacity = '0'
 focusBox.style.transition = 'border-color 0.1s, opacity 0.2s'
-focusBox.style.zIndex = '9999'
+focusBox.style.zIndex = '1999'
 document.body.appendChild(focusBox)
 
 const afGrid = document.createElement('div')
