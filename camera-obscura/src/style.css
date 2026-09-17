@@ -383,8 +383,8 @@ input[type=color]::-webkit-color-swatch {
 
 @media (max-width: 900px) {
   .studio-sidebar {
-    top: 72px;
-    right: 14px;
+    top: 76px;
+    right: 20px;
     width: min(320px, calc(100vw - 28px));
     max-height: calc(100vh - 88px);
     box-sizing: border-box;
@@ -411,7 +411,7 @@ input[type=color]::-webkit-color-swatch {
 
 @media (max-width: 600px) {
   .studio-sidebar {
-    top: 66px;
+    top: 86px;
     right: 10px;
     width: calc(100vw - 20px);
     max-height: calc(100dvh - 78px);
