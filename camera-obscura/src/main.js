@@ -727,6 +727,8 @@ hud.style.color = '#00ff00'
 hud.style.fontFamily = "'CustomDigitalFont', monospace";
 hud.style.fontSize = '18px'
 hud.style.letterSpacing = '1px'
+hud.style.whiteSpace = 'nowrap'
+hud.style.width = 'max-content'
 viewfinder.appendChild(hud)
 
 function updateHUD() {
