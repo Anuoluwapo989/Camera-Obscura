@@ -494,14 +494,12 @@ const studioUIHTML = `
         <div class="control-row"><label>Color</label><input type="color" id="ui-key-color" value="#ffffff"></div>
         <div class="toggle-row"><input type="checkbox" id="ui-key-help" checked> Show Helper Box</div>
       </div>
-      <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 5px 0;">
       <div class="control-group">
         <h3>Fill Light</h3>
         <div class="control-row"><label>Intensity</label><input type="range" id="ui-fill-int" min="0" max="1000" value="226"></div>
         <div class="control-row"><label>Color</label><input type="color" id="ui-fill-color" value="#ffffff"></div>
         <div class="toggle-row"><input type="checkbox" id="ui-fill-help" checked> Show Helper Box</div>
       </div>
-      <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 5px 0;">
       <div class="control-group">
         <h3>Rim / Hair Light</h3>
         <div class="control-row"><label>Intensity</label><input type="range" id="ui-rim-int" min="0" max="1000" value="350"></div>
@@ -517,7 +515,6 @@ const studioUIHTML = `
         <div class="control-row"><label>Paper Color</label><input type="color" id="ui-cyc-color" value="#8a2020"></div>
         <div class="control-row"><label>Roughness</label><input type="range" id="ui-cyc-rough" min="0" max="1" value="0.85" step="0.01"></div>
       </div>
-      <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); margin: 5px 0;">
       <div class="control-group">
         <h3>Ambient Bounce</h3>
         <div class="control-row"><label>Intensity</label><input type="range" id="ui-amb-int" min="0" max="5" value="1" step="0.1"></div>
