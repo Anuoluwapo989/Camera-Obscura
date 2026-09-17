@@ -781,11 +781,18 @@ window.addEventListener('pointerup', (e) => {
   focusBox.style.borderColor = 'rgba(255, 255, 255, 0.8)'
 
   const canvasRect = canvas.getBoundingClientRect()
-  if (targetPixelX < canvasRect.left || targetPixelX > canvasRect.right ||
-    targetPixelY < canvasRect.top || targetPixelY > canvasRect.bottom) return
+  const viewfinderCenterX = vfRect.left + vfRect.width / 2
+  const viewfinderCenterY = vfRect.top + vfRect.height / 2
+  const canvasCenterX = canvasRect.left + canvasRect.width / 2
+  const canvasCenterY = canvasRect.top + canvasRect.height / 2
+  const projectedPixelX = canvasCenterX + (targetPixelX - viewfinderCenterX) * (canvasRect.width / vfRect.width)
+  const projectedPixelY = canvasCenterY + (targetPixelY - viewfinderCenterY) * (canvasRect.height / vfRect.height)
 
-  mouse.x = ((targetPixelX - canvasRect.left) / canvasRect.width) * 2 - 1
-  mouse.y = -((targetPixelY - canvasRect.top) / canvasRect.height) * 2 + 1
+  if (projectedPixelX < canvasRect.left || projectedPixelX > canvasRect.right ||
+    projectedPixelY < canvasRect.top || projectedPixelY > canvasRect.bottom) return
+
+  mouse.x = ((projectedPixelX - canvasRect.left) / canvasRect.width) * 2 - 1
+  mouse.y = -((projectedPixelY - canvasRect.top) / canvasRect.height) * 2 + 1
   raycaster.setFromCamera(mouse, camera)
 
   const objectsToTest = subject ? [subject, cyclorama] : [cyclorama]
@@ -793,10 +800,8 @@ window.addEventListener('pointerup', (e) => {
 
   if (intersects.length > 0) {
     const hitPoint = intersects[0].point
-    const cameraDirection = new THREE.Vector3()
-    camera.getWorldDirection(cameraDirection)
-    const hitVector = new THREE.Vector3().subVectors(hitPoint, camera.position)
-    const focusDist = Math.abs(hitVector.dot(cameraDirection))
+    const hitPointInCameraSpace = camera.worldToLocal(hitPoint.clone())
+    const focusDist = Math.max(0.1, -hitPointInCameraSpace.z)
 
     lensState.focusDistance = focusDist
     bokehPass.uniforms.focus.value = focusDist
