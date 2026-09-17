@@ -1,6 +1,7 @@
 
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import { TransformControls } from 'three/addons/controls/TransformControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
@@ -104,6 +105,39 @@ controls.minAzimuthAngle = -Math.PI / 2.5 // Left wall limit
 controls.maxAzimuthAngle = Math.PI / 2.5  // Right wall limit
 controls.maxDistance = 14; // Prevents zooming backwards out of the studio walls
 controls.minDistance = 2;  // Prevents zooming directly through the 3D model
+
+const transformControl = new TransformControls(camera, renderer.domElement)
+
+transformControl.addEventListener('dragging-changed', (e) => {
+  controls.enabled = !e.value
+})
+scene.add(transformControl.getHelper())
+const lightRaycaster = new THREE.Raycaster()
+const lightMouse = new THREE.Vector2()
+
+window.addEventListener('pointerdown', (e) => {
+  if (e.target !== renderer.domElement || isCameraMode) return
+
+  if (transformControl.axis !== null) return
+
+  const rect = renderer.domElement.getBoundingClientRect()
+  lightMouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1
+  lightMouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1
+
+  lightRaycaster.setFromCamera(lightMouse, camera)
+
+  const intersects = lightRaycaster.intersectObjects([keySoftbox, fillSoftbox, rimSoftbox], false)
+
+  if (intersects.length > 0) {
+    const hit = intersects[0].object
+    if (hit === keySoftbox) transformControl.attach(light)
+    else if (hit === fillSoftbox) transformControl.attach(fillLight)
+    else if (hit === rimSoftbox) transformControl.attach(rimLight)
+    else {
+      transformControl.detach()
+    }
+  }
+})
 const color = 0xFFFFFF
 const intensity = 230
 const light = new THREE.SpotLight(color, intensity)
@@ -530,7 +564,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
   btn.addEventListener('click', (e) => {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'))
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
-    
+
     e.target.classList.add('active')
     document.getElementById(e.target.dataset.tab).classList.add('active')
   })
@@ -607,7 +641,7 @@ const cameraToggle = document.getElementById('camera-toggle')
 const sidebarToggle = document.getElementById('sidebar-toggle')
 sidebarToggle.innerHTML = '<img src="/settings.svg" alt="Settings" width="22" height="22">'
 
-let isSidebarOpen = window.innerWidth >= 768 
+let isSidebarOpen = window.innerWidth >= 768
 studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
 
 sidebarToggle.addEventListener('click', () => {
@@ -622,10 +656,13 @@ function toggleCameraMode() {
     studioSidebar.style.display = 'none'
     sidebarToggle.style.display = 'none'
     viewfinder.style.display = 'block'
-    
+
     cameraToggle.innerHTML = closeIconSvg
     cameraToggle.classList.add('active')
-    
+
+    transformControl.detach()
+    transformControl.enabled = false
+
     updateHUD()
 
     lightHelper.visible = false
@@ -639,9 +676,11 @@ function toggleCameraMode() {
     sidebarToggle.style.display = 'flex'
     studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
     viewfinder.style.display = 'none'
-    
+
     cameraToggle.innerHTML = cameraIconSvg
     cameraToggle.classList.remove('active')
+
+    transformControl.enabled = true
 
     syncHelperVisibility()
     keySoftbox.visible = true
