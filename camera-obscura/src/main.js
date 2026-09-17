@@ -725,7 +725,7 @@ hud.style.left = '50%'
 hud.style.transform = 'translateX(-50%)'
 hud.style.color = '#00ff00'
 hud.style.fontFamily = "'CustomDigitalFont', monospace";
-hud.style.fontSize = '20px'
+hud.style.fontSize = '18px'
 hud.style.letterSpacing = '1px'
 viewfinder.appendChild(hud)
 
@@ -738,6 +738,7 @@ function updateHUD() {
   // ${focalLength}mm &nbsp;|&nbsp; (Removed)
   hud.innerHTML = `f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso}`
 }
+
 const focusBox = document.createElement('div')
 focusBox.style.position = 'fixed'
 focusBox.style.width = '30px'
