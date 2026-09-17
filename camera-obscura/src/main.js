@@ -113,6 +113,8 @@ fillLight.shadow.bias = -0.0001;
 fillLight.shadow.normalBias = 0.02;
 
 scene.add(fillLightHelper)
+const ambientBounce = new THREE.HemisphereLight(0x111111, 0x444444, 0.5)
+scene.add(ambientBounce)
 const rimLight = new THREE.SpotLight(0xFFFFFF, 350)
 rimLight.position.set(0, 5, -6)
 rimLight.angle = Math.PI / 5
@@ -214,6 +216,7 @@ loader.load('model.glb', (gltf) => {
   scene.add(subject)
   light.target = subject
   fillLight.target = subject
+  rimLight.target = subject
 
 })
 function createCycloramaGeometry() {
@@ -674,17 +677,17 @@ function updateHUD() {
   hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso}`
 }
 const focusBox = document.createElement('div')
-focusBox.style.position = 'fixed'
+focusBox.style.position = 'absolute'
 focusBox.style.width = '30px'
 focusBox.style.height = '30px'
 focusBox.style.border = '1px solid rgba(255, 255, 255, 0.8)'
 focusBox.style.boxSizing = 'border-box'
-focusBox.style.transform = 'translate(-50%, -50%)' // PERFECT MATHEMATICAL CENTER FIXES RAYCASTER
+focusBox.style.transform = 'translate(-50%, -50%)'
 focusBox.style.pointerEvents = 'none'
 focusBox.style.opacity = '0'
 focusBox.style.transition = 'border-color 0.1s, opacity 0.2s'
 focusBox.style.zIndex = '9999'
-document.body.appendChild(focusBox)
+viewfinder.appendChild(focusBox)
 
 const afGrid = document.createElement('div')
 afGrid.style.position = 'absolute'
@@ -803,6 +806,7 @@ function animate(time) {
   if (!isCameraMode) {
     lightHelper.update()
     fillLightHelper.update()
+    rimLightHelper.update()
 
     keySoftbox.position.copy(light.position)
     keySoftbox.lookAt(light.target.position)
