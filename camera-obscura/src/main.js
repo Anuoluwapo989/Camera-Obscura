@@ -59,6 +59,7 @@ function resizeStage() {
 renderer.shadowMap.enabled = true
 renderer.shadowMap.type = THREE.PCFShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
+renderer.outputColorSpace = THREE.SRGBColorSpace
 renderer.toneMappingExposure = 1.0 // Base exposure, which we will dynamically control
 canvas.addEventListener('webglcontextlost', (event) => {
   event.preventDefault()
@@ -486,6 +487,7 @@ function updateDepthOfField() {
   const blurIntensity = (physicalAperture / lensState.focusDistance) * 0.0008
   const dynamicMaxBlur = Math.max(0.00, Math.min(blurIntensity, 0.04))
   bokehPass.uniforms.maxblur.value = dynamicMaxBlur
+  bokehPass.enabled = dynamicMaxBlur >= 0.00005
 }
 updateDepthOfField()
 function updateExposure() {
@@ -733,7 +735,8 @@ function updateHUD() {
   const focusDist = lensState.focusDistance.toFixed(1);
   const ssDisplay = lensState.shutterSpeed >= 1 ? '1"' : `1/${Math.round(1 / lensState.shutterSpeed)}`
 
-  hud.innerHTML = `${focalLength}mm &nbsp;|&nbsp; f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso}`
+  // ${focalLength}mm &nbsp;|&nbsp; (Removed)
+  hud.innerHTML = `f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso}`
 }
 const focusBox = document.createElement('div')
 focusBox.style.position = 'fixed'
@@ -883,7 +886,8 @@ function animate(time) {
 
     renderer.render(scene, camera)
   } else {
-    composer.render()
+    if (bokehPass.enabled) composer.render()
+    else renderer.render(scene, camera)
   }
 }
 
