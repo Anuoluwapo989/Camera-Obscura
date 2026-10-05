@@ -293,11 +293,18 @@
 @media (max-width: 600px) {
   .app-branding {
     left: 22px;
+    font-size: 14px;
   }
 
   #toggles-container {
     right: 10px;
     gap: 8px;
+  }
+
+  #camera-toggle {
+    position: fixed;
+    top: 10px;
+    left: 10px;
   }
 
   .agency-nav {
