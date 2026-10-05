@@ -41,14 +41,20 @@ const renderer = new THREE.WebGLRenderer({ canvas: canvas, preserveDrawingBuffer
 
 const renderScale = () => Math.min(window.devicePixelRatio || 1, 1.75)
 
+function getStageSize() {
+  return {
+    width: canvas.clientWidth || window.innerWidth,
+    height: canvas.clientHeight || window.innerHeight
+  }
+}
+
 const getCameraExposure = () => {
   const lightGathered = (lensState.iso / 100) * lensState.shutterSpeed / Math.pow(lensState.fStop, 2)
   return lightGathered * 196
 }
 
 function resizeStage() {
-  const width = window.innerWidth
-  const height = window.innerHeight
+  const { width, height } = getStageSize()
   const pixelRatio = renderScale()
 
   camera.aspect = width / height
@@ -814,10 +820,13 @@ window.addEventListener('keydown', (event) => {
     toggleCameraMode()
   }
 })
-window.addEventListener('resize', () => {
+function handleViewportResize() {
   resizeStage()
   updateViewfinderFrame()
-})
+}
+
+window.addEventListener('resize', handleViewportResize)
+window.visualViewport?.addEventListener('resize', handleViewportResize)
 const viewfinder = document.createElement('div')
 viewfinder.id = 'viewfinder'
 viewfinder.style.position = 'absolute'
