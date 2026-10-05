@@ -3,16 +3,26 @@ import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { TransformControls } from 'three/addons/controls/TransformControls.js'
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js'
-import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js'
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js'
-import { BokehPass } from 'three/examples/jsm/postprocessing/BokehPass.js'
-import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js'
 import { EXRLoader } from 'three/examples/jsm/loaders/EXRLoader.js'
+import {
+  DepthOfFieldEffect,
+  EffectComposer,
+  EffectPass,
+  RenderPass
+  ,SMAAEffect,
+  SMAAPreset
+} from 'postprocessing'
 const scene = new THREE.Scene()
-scene.background = new THREE.Color('#0f0f0f')
-scene.fog = new THREE.Fog('#0f0f0f', 25, 70)
+scene.background = new THREE.Color('#000000')
+scene.fog = new THREE.Fog('#000000', 25, 70)
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000)
 const exrLoader = new EXRLoader()
+let isCameraMode = false
+const studioScale = {
+  worldUnitsPerMeter: 1,
+  floorHalfWidth: 14,
+  floorBack: 6
+}
 
 exrLoader.load('/studio.exr', (environmentMap) => {
   environmentMap.mapping = THREE.EquirectangularReflectionMapping
@@ -27,37 +37,32 @@ const lightColors = {
   rim: '#ffffff'
 }
 const canvas = document.querySelector('#myCanvas');
-const renderer = new THREE.WebGLRenderer({ canvas: canvas, preserveDrawingBuffer: true, antialias: true })
+const renderer = new THREE.WebGLRenderer({ canvas: canvas, preserveDrawingBuffer: true, antialias: false })
 
-const renderScale = () => Math.min(window.devicePixelRatio || 1, 2)
+const renderScale = () => Math.min(window.devicePixelRatio || 1, 1.75)
+
+const getCameraExposure = () => {
+  const lightGathered = (lensState.iso / 100) * lensState.shutterSpeed / Math.pow(lensState.fStop, 2)
+  return lightGathered * 196
+}
 
 function resizeStage() {
   const width = window.innerWidth
   const height = window.innerHeight
-
-  canvas.style.position = 'fixed'
-  canvas.style.left = '0'
-  canvas.style.top = '0'
-  canvas.style.width = `${width}px`
-  canvas.style.height = `${height}px`
-  canvas.style.maxWidth = '100vw'
-  canvas.style.maxHeight = '100vh'
-  canvas.style.transform = 'none'
-
   const pixelRatio = renderScale()
+
   camera.aspect = width / height
   camera.updateProjectionMatrix()
   renderer.setPixelRatio(pixelRatio)
   renderer.setSize(width, height, false)
-
-  if (typeof composer !== 'undefined') {
-    composer.setPixelRatio(pixelRatio)
-    composer.setSize(width, height)
-  }
+  composer.setSize(width, height)
+  depthOfField.bokehScale = isCameraMode
+    ? Math.max(0.1, renderer.domElement.width * (0.03 / 24))
+    : 0
 }
 
 renderer.shadowMap.enabled = true
-renderer.shadowMap.type = THREE.PCFShadowMap
+renderer.shadowMap.type = THREE.PCFSoftShadowMap
 renderer.toneMapping = THREE.ACESFilmicToneMapping
 renderer.outputColorSpace = THREE.SRGBColorSpace
 renderer.toneMappingExposure = 1.0 // Base exposure, which we will dynamically control
@@ -68,33 +73,27 @@ canvas.addEventListener('webglcontextlost', (event) => {
 }, false)
 
 canvas.addEventListener('webglcontextrestored', () => {
-  console.log('WebGL Context Restored. Rebuilding graohics pipeline...')
+  console.log('WebGL Context Restored. Rebuilding graphics pipeline...')
   resizeStage()
 }, false)
 const pixelRatio = renderScale()
 
-const rendertarget = new THREE.WebGLRenderTarget(
-  window.innerWidth * pixelRatio,
-  window.innerHeight * pixelRatio,
-  { samples: 4 }
-)
-const composer = new EffectComposer(renderer, rendertarget)
+const composer = new EffectComposer(renderer, { multisampling: 0 })
 
-resizeStage()
-composer.setPixelRatio(pixelRatio)
-composer.setSize(window.innerWidth, window.innerHeight)
 const renderPass = new RenderPass(scene, camera)
 composer.addPass(renderPass)
-const bokehPass = new BokehPass(scene, camera, {
-  focus: 4.5,
-  aperture: 0.000,
-  maxblur: 0.00,
-  width: window.innerWidth * pixelRatio,
-  height: window.innerHeight * pixelRatio
+const depthOfField = new DepthOfFieldEffect(camera, {
+  focusDistance: 4.5,
+  focusRange: 1,
+  bokehScale: 1,
+  resolutionScale: 0.5
 })
-composer.addPass(bokehPass)
-const outputPass = new OutputPass()
-composer.addPass(outputPass)
+const smaaEffect = new SMAAEffect({ preset: SMAAPreset.HIGH })
+const effectPass = new EffectPass(camera, depthOfField, smaaEffect)
+effectPass.enabled = true
+depthOfField.bokehScale = 0
+composer.addPass(effectPass)
+resizeStage()
 const controls = new OrbitControls(camera, renderer.domElement)
 controls.enableDamping = true
 controls.dampingFactor = 0.05
@@ -147,8 +146,8 @@ light.angle = Math.PI / 6
 light.penumbra = 0.5
 light.decay = 2
 light.castShadow = true;
-light.shadow.mapSize.width = 2048;
-light.shadow.mapSize.height = 2048;
+light.shadow.mapSize.width = 1024;
+light.shadow.mapSize.height = 1024;
 light.shadow.bias = -0.0001;
 light.shadow.normalBias = 0.02;
 
@@ -162,22 +161,22 @@ scene.add(fillLight)
 const lightHelper = new THREE.SpotLightHelper(light)
 scene.add(lightHelper)
 const fillLightHelper = new THREE.SpotLightHelper(fillLight)
-fillLight.shadow.mapSize.width = 2048;
-fillLight.shadow.mapSize.height = 2048;
+fillLight.shadow.mapSize.width = 1024;
+fillLight.shadow.mapSize.height = 1024;
 fillLight.shadow.bias = -0.0001;
 fillLight.shadow.normalBias = 0.02;
 
 scene.add(fillLightHelper)
 const ambientBounce = new THREE.HemisphereLight(0x111111, 0x444444, 0.5)
 scene.add(ambientBounce)
-const rimLight = new THREE.SpotLight(0xFFFFFF, 350)
+const rimLight = new THREE.SpotLight(0xFFFFFF, 20)
 rimLight.position.set(0, 5, -6)
 rimLight.angle = Math.PI / 5
 rimLight.penumbra = 0.5
 rimLight.decay = 2
 rimLight.castShadow = true
-rimLight.shadow.mapSize.width = 2048;
-rimLight.shadow.mapSize.height = 2048;
+rimLight.shadow.mapSize.width = 1024;
+rimLight.shadow.mapSize.height = 1024;
 rimLight.shadow.bias = -0.0001;
 rimLight.shadow.normalBias = 0.02;
 scene.add(rimLight)
@@ -280,8 +279,8 @@ function createCycloramaGeometry() {
   const geo = new THREE.PlaneGeometry(planeWidth, planeDepth, 128, 128)
   const pos = geo.attributes.position
 
-  const floorHalfWidth = 14 // Flat floor extends 14 units left and right
-  const floorBack = 6       // Flat floor extends 6 units back from origin
+  const floorHalfWidth = studioScale.floorHalfWidth
+  const floorBack = studioScale.floorBack
   const radius = 6          // Smoothness of the corner fillet
 
   for (let i = 0; i < pos.count; i++) {
@@ -332,7 +331,7 @@ function createCycloramaGeometry() {
 
 const cycGeometry = createCycloramaGeometry()
 const cycMaterial = new THREE.MeshStandardMaterial({
-  color: 0x990a00,
+  color: 0x696969,
   roughness: 0.85,
   metalness: 0.05,
   side: THREE.DoubleSide
@@ -341,24 +340,39 @@ const cycMaterial = new THREE.MeshStandardMaterial({
 const cyclorama = new THREE.Mesh(cycGeometry, cycMaterial)
 cyclorama.receiveShadow = true
 scene.add(cyclorama)
+const frameState = {
+  width: 3,
+  height: 2,
+  label: '2:3 HORIZONTAL'
+}
+
+function getFrameAspect() {
+  return frameState.width / frameState.height
+}
+
 const cameraActions = {
   takeSnapshot: () => {
     renderer.setAnimationLoop(null)
 
     const currentWidth = window.innerWidth
     const currentHeight = window.innerHeight
-    const currentAspect = camera.aspect
     const currentPixelRatio = renderer.getPixelRatio()
+    const currentBokehScale = depthOfField.bokehScale
     const isMobile = window.innerWidth < 768
     const exportWidth = isMobile ? currentWidth * 2 : 2400
-    const exportHeight = isMobile ? currentHeight * 2 : 3000
+    const exportHeight = Math.round(exportWidth / getFrameAspect())
+    const currentAspect = camera.aspect
+    const currentProjectionMatrix = camera.projectionMatrix.clone()
+    const currentProjectionMatrixInverse = camera.projectionMatrixInverse.clone()
 
-    camera.aspect = exportWidth / exportHeight
+    camera.aspect = getFrameAspect()
     camera.updateProjectionMatrix()
 
     renderer.setPixelRatio(1)
     renderer.setSize(exportWidth, exportHeight, false)
     composer.setSize(exportWidth, exportHeight)
+    depthOfField.bokehScale = Math.max(0.1, exportWidth * (0.03 / 24))
+
     setTimeout(() => {
       composer.render()
       const imageURL = renderer.domElement.toDataURL('image/png', 1.0)
@@ -369,16 +383,21 @@ const cameraActions = {
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
-      camera.aspect = currentAspect
-      camera.updateProjectionMatrix()
+
       renderer.setPixelRatio(currentPixelRatio)
       renderer.setSize(currentWidth, currentHeight)
       composer.setSize(currentWidth, currentHeight)
-
+      camera.aspect = currentAspect
+      camera.projectionMatrix.copy(currentProjectionMatrix)
+      camera.projectionMatrixInverse.copy(currentProjectionMatrixInverse)
+      resizeStage()
+      depthOfField.bokehScale = currentBokehScale
+      renderer.toneMappingExposure = isCameraMode ? getCameraExposure() : 1
       renderer.setAnimationLoop(animate)
     }, 100)
   }
 }
+
 const lensState = {
   fStop: 2.8, // Aperture
   focusDistance: 4.5,
@@ -387,6 +406,7 @@ const lensState = {
   iso: 400,          // Base ISO
   shutterSpeed: 0.01 // Base Shutter Speed (1/100th of a second)
 }
+let viewfinderExposure
 const glassUIHTML = `
   <div id="camera-glass-ui" class="camera-glass-deck">
     <div class="lens-controls">
@@ -425,6 +445,14 @@ const glassUIHTML = `
           <option value="3200">ISO 3200</option>
           <option value="6400">ISO 6400</option>
         </select>
+        <select id="ui-frame" aria-label="Frame aspect ratio">
+          <option value="3:2" selected>2:3 H</option>
+          <option value="2:3">2:3 V</option>
+          <option value="4:3">3:4 H</option>
+          <option value="3:4">3:4 V</option>
+          <option value="16:9">9:16 H</option>
+          <option value="9:16">9:16 V</option>
+        </select>
         <div class="toggle-row">
           <input type="checkbox" id="ui-af" ${lensState.afGrid ? 'checked' : ''}> AF Grid
         </div>
@@ -441,6 +469,7 @@ const uiFocal = document.getElementById('ui-focal')
 const uiAperture = document.getElementById('ui-aperture')
 const uiShutter = document.getElementById('ui-shutter')
 const uiIso = document.getElementById('ui-iso')
+const uiFrame = document.getElementById('ui-frame')
 const uiAf = document.getElementById('ui-af')
 const uiShutterBtn = document.getElementById('ui-shutter-btn')
 uiFocal.addEventListener('input', (e) => {
@@ -455,7 +484,6 @@ uiFocal.addEventListener('input', (e) => {
 uiAperture.addEventListener('input', (e) => {
   const val = parseFloat(e.target.value)
   lensState.fStop = val
-  bokehPass.uniforms.aperture.value = 1 / (val * 16.66)
   updateDepthOfField()
   updateExposure()
   updateHUD()
@@ -473,29 +501,76 @@ uiIso.addEventListener('change', (e) => {
   updateHUD()
 })
 
+uiFrame.addEventListener('change', (e) => {
+  const [width, height] = e.target.value.split(':').map(Number)
+  frameState.width = width
+  frameState.height = height
+  frameState.label = e.target.options[e.target.selectedIndex].textContent
+  updateViewfinderFrame()
+})
+
 uiAf.addEventListener('change', (e) => {
   lensState.afGrid = e.target.checked
   afGrid.style.display = lensState.afGrid ? 'block' : 'none'
 })
 uiShutterBtn.addEventListener('click', cameraActions.takeSnapshot)
-bokehPass.uniforms.focus.value = lensState.focusDistance
-bokehPass.uniforms.aperture.value = 1 / (lensState.fStop * 16.66)
 camera.fov = THREE.MathUtils.radToDeg(2 * Math.atan(24 / (2 * lensState.focalLength)))
 camera.updateProjectionMatrix()
 function updateDepthOfField() {
-  const physicalAperture = lensState.focalLength / lensState.fStop
-  const blurIntensity = (physicalAperture / lensState.focusDistance) * 0.0008
-  const dynamicMaxBlur = Math.max(0.00, Math.min(blurIntensity, 0.04))
-  bokehPass.uniforms.maxblur.value = dynamicMaxBlur
-  bokehPass.enabled = dynamicMaxBlur >= 0.00005
+  const sensorWidthMm = 24
+  const focalLengthMm = lensState.focalLength
+  const focusDistanceMm = Math.max(
+    focalLengthMm + 0.001,
+    (lensState.focusDistance / studioScale.worldUnitsPerMeter) * 1000
+  )
+  const circleOfConfusionMm = 0.03
+  const hyperfocalDistanceMm = (focalLengthMm * focalLengthMm) /
+    (lensState.fStop * circleOfConfusionMm) + focalLengthMm
+  const nearFocusMm = (hyperfocalDistanceMm * focusDistanceMm) /
+    (hyperfocalDistanceMm + focusDistanceMm - focalLengthMm)
+  const farFocusMm = hyperfocalDistanceMm > focusDistanceMm - focalLengthMm
+    ? (hyperfocalDistanceMm * focusDistanceMm) /
+    (hyperfocalDistanceMm - focusDistanceMm + focalLengthMm)
+    : Infinity
+  const focusRangeWorldUnits = Math.max(
+    0.001,
+    Math.min(1000, ((farFocusMm - nearFocusMm) / 1000) * studioScale.worldUnitsPerMeter)
+  )
+
+  depthOfField.cocMaterial.focusDistance = lensState.focusDistance
+  depthOfField.cocMaterial.focusRange = focusRangeWorldUnits
 }
 updateDepthOfField()
 function updateExposure() {
-  const lightGathered = (lensState.iso / 100) * lensState.shutterSpeed / Math.pow(lensState.fStop, 2)
-  renderer.toneMappingExposure = lightGathered * 196
+  const exposure = getCameraExposure()
+  renderer.toneMappingExposure = isCameraMode ? exposure : 1
+
+  if (viewfinderExposure) {
+    const exposureStops = THREE.MathUtils.clamp(Math.log2(Math.max(exposure, 0.0001)), -6, 6)
+    viewfinderExposure.style.opacity = `${Math.min(0.78, Math.abs(exposureStops) * 0.13)}`
+    viewfinderExposure.style.backgroundColor = exposureStops < 0 ? '#000000' : '#ffffff'
+  }
 }
 updateExposure()
-let isCameraMode = false
+
+// --- APP LAUNCH SCREEN & IN-APP BRANDING ---
+const websiteHTML = `
+  <div id="intro-screen" class="intro-screen">
+    <nav class="agency-nav">
+      <div class="brand"><span>CAMERA OBSCURA</span><small>OPTICAL PREVISUALIZATION SYSTEM</small></div>
+    </nav>
+
+    <div id="hero-overlay" class="hero-overlay">
+      <button id="enter-btn" class="enter-btn">ENTER STUDIO</button>
+    </div>
+    
+    <div class="intro-footer"><span>CAMERA OBSCURA</span><span>© 2026 Anu Abosede</span></div>
+  </div>
+
+  <div id="app-branding" class="app-branding">CAMERA OBSCURA</div>
+`
+document.body.insertAdjacentHTML('afterbegin', websiteHTML)
+
 const studioUIHTML = `
   <div id="studio-sidebar" class="studio-sidebar">
     <div class="tabs">
@@ -528,19 +603,19 @@ const studioUIHTML = `
         <h3>Key Light</h3>
         <div class="control-row"><label>Intensity</label><input type="range" id="ui-key-int" min="0" max="1000" value="164"></div>
         <div class="control-row"><label>Color</label><input type="color" id="ui-key-color" value="#ffffff"></div>
-        <div class="toggle-row"><input type="checkbox" id="ui-key-help" checked> Show Helper Box</div>
+        <div class="toggle-row"><input type="checkbox" id="ui-key-help"> Show Helper Box</div>
       </div>
       <div class="control-group">
         <h3>Fill Light</h3>
         <div class="control-row"><label>Intensity</label><input type="range" id="ui-fill-int" min="0" max="1000" value="226"></div>
         <div class="control-row"><label>Color</label><input type="color" id="ui-fill-color" value="#ffffff"></div>
-        <div class="toggle-row"><input type="checkbox" id="ui-fill-help" checked> Show Helper Box</div>
+        <div class="toggle-row"><input type="checkbox" id="ui-fill-help"> Show Helper Box</div>
       </div>
       <div class="control-group">
         <h3>Rim / Hair Light</h3>
-        <div class="control-row"><label>Intensity</label><input type="range" id="ui-rim-int" min="0" max="1000" value="350"></div>
+        <div class="control-row"><label>Intensity</label><input type="range" id="ui-rim-int" min="0" max="1000" value="100"></div>
         <div class="control-row"><label>Color</label><input type="color" id="ui-rim-color" value="#ffffff"></div>
-        <div class="toggle-row"><input type="checkbox" id="ui-rim-help" checked> Show Helper Box</div>
+        <div class="toggle-row"><input type="checkbox" id="ui-rim-help"> Show Helper Box</div>
       </div>
     </div>
 
@@ -548,7 +623,7 @@ const studioUIHTML = `
     <div id="tab-stage" class="tab-content">
       <div class="control-group">
         <h3>Seamless Cyclorama</h3>
-        <div class="control-row"><label>Paper Color</label><input type="color" id="ui-cyc-color" value="#8a2020"></div>
+        <div class="control-row"><label>Paper Color</label><input type="color" id="ui-cyc-color" value="#696969"></div>
         <div class="control-row"><label>Roughness</label><input type="range" id="ui-cyc-rough" min="0" max="1" value="0.85" step="0.01"></div>
       </div>
       <div class="control-group">
@@ -584,15 +659,17 @@ document.getElementById('ui-spin-angle').addEventListener('input', (e) => { if (
 document.getElementById('ui-auto-spin').addEventListener('change', (e) => turntableState.autoSpin = e.target.checked)
 document.getElementById('ui-spin-speed').addEventListener('input', (e) => turntableState.speed = parseFloat(e.target.value))
 
-const lightHelperToggle = { showHelper: true }
-const fillLightHelperToggle = { showHelper: true }
-const rimLightHelperToggle = { showHelper: true }
+const lightHelperToggle = { showHelper: false }
+const fillLightHelperToggle = { showHelper: false }
+const rimLightHelperToggle = { showHelper: false }
 
 function syncHelperVisibility() {
   lightHelper.visible = !isCameraMode && lightHelperToggle.showHelper
   fillLightHelper.visible = !isCameraMode && fillLightHelperToggle.showHelper
   rimLightHelper.visible = !isCameraMode && rimLightHelperToggle.showHelper
 }
+
+syncHelperVisibility()
 
 document.getElementById('ui-key-int').addEventListener('input', (e) => light.intensity = e.target.value)
 document.getElementById('ui-key-color').addEventListener('input', (e) => { light.color.set(e.target.value); keysoftboxMaterial.color.set(e.target.value) })
@@ -620,12 +697,14 @@ document.getElementById('ui-cyc-rough').addEventListener('input', (e) => cycMate
 document.getElementById('ui-amb-int').addEventListener('input', (e) => ambientBounce.intensity = e.target.value)
 document.getElementById('ui-hdri-int').addEventListener('input', (e) => scene.environmentIntensity = e.target.value)
 const uiTogglesHTML = `
+<div id="toggles-container">
   <div id="camera-toggle" class="glass-btn">
     <img src="/camera.svg" alt="Camera" width="22" height="22">
   </div>
   <div id="sidebar-toggle" class="glass-btn">
      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="opacity: 0.8;"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
-    </div>
+  </div>
+</div>
 `
 
 const cameraIconSvg = `
@@ -639,12 +718,43 @@ const closeIconSvg = `
 `
 document.body.insertAdjacentHTML('beforeend', uiTogglesHTML)
 
+const introScreen = document.getElementById('intro-screen')
+const enterBtn = document.getElementById('enter-btn')
+const appBranding = document.getElementById('app-branding')
+const heroOverlay = document.getElementById('hero-overlay')
 const cameraToggle = document.getElementById('camera-toggle')
 const sidebarToggle = document.getElementById('sidebar-toggle')
 sidebarToggle.innerHTML = '<img src="/settings.svg" alt="Settings" width="22" height="22">'
 
-let isSidebarOpen = window.innerWidth >= 768
-studioSidebar.style.display = isSidebarOpen ? 'block' : 'none'
+// 1. Start with the app UI completely hidden
+let isSidebarOpen = false
+studioSidebar.style.display = 'none'
+sidebarToggle.style.opacity = '0'
+cameraToggle.style.opacity = '0'
+
+// 2. The Launch Animation
+enterBtn.addEventListener('click', () => {
+  // Slide the massive text away
+  heroOverlay.classList.add('hidden')
+  introScreen.classList.add('hidden')
+
+  // Fade the toolset in
+  setTimeout(() => {
+    sidebarToggle.style.transition = 'opacity 1s ease'
+    cameraToggle.style.transition = 'opacity 1s ease'
+    sidebarToggle.style.opacity = '1'
+    cameraToggle.style.opacity = '1'
+    appBranding.style.opacity = '1'
+
+    // Automatically pop open the sidebar on desktop
+    if (window.innerWidth >= 768) {
+      isSidebarOpen = true
+      studioSidebar.style.display = 'block'
+      // Add a quick fade-in animation to the sidebar
+      studioSidebar.style.animation = 'fadeIn 0.5s ease forwards'
+    }
+  }, 400)
+})
 
 sidebarToggle.addEventListener('click', () => {
   isSidebarOpen = !isSidebarOpen
@@ -653,6 +763,10 @@ sidebarToggle.addEventListener('click', () => {
 
 function toggleCameraMode() {
   isCameraMode = !isCameraMode
+  updateExposure()
+  depthOfField.bokehScale = isCameraMode
+    ? Math.max(0.1, renderer.domElement.width * (0.03 / 24))
+    : 0
   if (isCameraMode) {
     glassDeck.style.display = 'flex'
     studioSidebar.style.display = 'none'
@@ -700,15 +814,29 @@ window.addEventListener('keydown', (event) => {
     toggleCameraMode()
   }
 })
-window.addEventListener('resize', resizeStage)
+window.addEventListener('resize', () => {
+  resizeStage()
+  updateViewfinderFrame()
+})
 const viewfinder = document.createElement('div')
 viewfinder.id = 'viewfinder'
 viewfinder.style.position = 'absolute'
 viewfinder.style.top = '50%'
 viewfinder.style.left = '50%'
 viewfinder.style.transform = 'translate(-50%, -50%)'
-viewfinder.style.aspectRatio = '4 / 5'
-viewfinder.style.height = '85vh'
+function updateViewfinderFrame() {
+  const aspect = getFrameAspect()
+  const maxWidth = window.innerWidth * 0.9
+  const maxHeight = window.innerHeight * 0.85
+  const width = Math.min(maxWidth, maxHeight * aspect)
+  const height = width / aspect
+
+  viewfinder.style.width = `${width}px`
+  viewfinder.style.height = `${height}px`
+  viewfinder.style.aspectRatio = `${frameState.width} / ${frameState.height}`
+}
+
+updateViewfinderFrame()
 viewfinder.style.boxShadow = '0 0 0 9999px rgba(0, 0, 0, 0.75)'
 viewfinder.style.border = '2px solid rgba(255, 255, 255, 0.5)'
 viewfinder.style.backgroundImage = `
@@ -718,27 +846,46 @@ viewfinder.style.backgroundImage = `
 viewfinder.style.pointerEvents = 'none'
 viewfinder.style.display = 'none'
 document.body.appendChild(viewfinder)
+viewfinderExposure = document.createElement('div')
+viewfinderExposure.className = 'viewfinder-exposure'
+viewfinder.insertBefore(viewfinderExposure, viewfinder.firstChild)
 const hud = document.createElement('div')
-hud.style.position = 'absolute'
-hud.style.top = '40px'
-hud.style.left = '50%'
-hud.style.transform = 'translateX(-50%)'
-hud.style.color = '#00ff00'
-hud.style.fontFamily = "'CustomDigitalFont', monospace";
-hud.style.fontSize = '18px'
-hud.style.letterSpacing = '1px'
-hud.style.whiteSpace = 'nowrap'
-hud.style.width = 'max-content'
+hud.className = 'viewfinder-hud'
 viewfinder.appendChild(hud)
 
 function updateHUD() {
   const focalLength = Math.round(lensState.focalLength);
   const fStop = lensState.fStop.toFixed(1);
-  const focusDist = lensState.focusDistance.toFixed(1);
   const ssDisplay = lensState.shutterSpeed >= 1 ? '1"' : `1/${Math.round(1 / lensState.shutterSpeed)}`
+  const exposureStops = THREE.MathUtils.clamp(
+    Math.log2(Math.max(getCameraExposure(), 0.0001)),
+    -4,
+    4
+  )
+  const meterPosition = THREE.MathUtils.clamp(((exposureStops + 2) / 4) * 100, 0, 100)
+  const meterBars = Array.from({ length: 10 }, () => '<i></i>').join('')
 
-  // ${focalLength}mm &nbsp;|&nbsp; (Removed)
-  hud.innerHTML = `f/${fStop} &nbsp;|&nbsp; ${ssDisplay} &nbsp;|&nbsp; ISO ${lensState.iso}`
+  hud.innerHTML = `
+    <span class="hud-group hud-camera">
+      <span class="hud-value">${focalLength}</span>
+      <span class="hud-unit">mm</span>
+      <span class="hud-value">${fStop}</span>
+    </span>
+    <span class="hud-meter" aria-label="Exposure compensation">
+      <span class="hud-meter-label">-2</span>
+      <span class="hud-meter-track" style="--exposure-position: ${meterPosition}%">
+        <span class="hud-meter-pointer"></span>
+        <span class="hud-meter-bars">${meterBars}</span>
+        
+      </span>
+      <span class="hud-meter-label">+2</span>
+    </span>
+    <span class="hud-group hud-exposure">
+      <span class="hud-unit">${ssDisplay}</span>
+      <span class="hud-label">ISO</span>
+      <span class="hud-value">${lensState.iso}</span>
+    </span>
+  `
 }
 
 const focusBox = document.createElement('div')
@@ -763,10 +910,17 @@ afGrid.style.display = 'none'
 viewfinder.appendChild(afGrid)
 
 const afPointOffsets = [
-  [0, 0], [-10, 0], [-20, 0], [-30, 0], [10, 0], [20, 0], [30, 0],
-  [-10, -12], [0, -12], [10, -12], [-10, 12], [0, 12], [10, 12],
-  [0, -24], [0, 24]
+  [0, 0], [-0.1, 0], [-0.2, 0], [-0.3, 0], [0.1, 0], [0.2, 0], [0.3, 0],
+  [-0.1, -0.12], [0, -0.12], [0.1, -0.12], [-0.1, 0.12], [0, 0.12], [0.1, 0.12],
+  [0, -0.24], [0, 0.24]
 ]
+
+function getFramePoint(frameRect, point) {
+  return {
+    x: frameRect.left + frameRect.width * (0.5 + point[0]),
+    y: frameRect.top + frameRect.height * (0.5 + point[1])
+  }
+}
 
 afPointOffsets.forEach(offset => {
   const pt = document.createElement('div')
@@ -775,8 +929,8 @@ afPointOffsets.forEach(offset => {
   pt.style.height = '6px'
   pt.style.border = '1px solid rgba(20, 20, 20, 0.9)'
   pt.style.outline = '1px solid rgba(255, 255, 255, 0.6)'
-  pt.style.left = `calc(50% + ${offset[0]}%)`
-  pt.style.top = `calc(50% + ${offset[1]}%)`
+  pt.style.left = `${(0.5 + offset[0]) * 100}%`
+  pt.style.top = `${(0.5 + offset[1]) * 100}%`
   pt.style.transform = 'translate(-50%, -50%)'
   afGrid.appendChild(pt)
 })
@@ -789,6 +943,8 @@ window.addEventListener('pointerdown', (e) => {
 })
 
 window.addEventListener('pointerup', (e) => {
+  if (e.target instanceof Element && e.target.closest('.camera-glass-deck, .glass-btn, input, select, button')) return
+
   const distance = Math.hypot(e.clientX - mouseDownPos.x, e.clientY - mouseDownPos.y)
   if (distance > 5) return
   if (!isCameraMode) return
@@ -802,22 +958,23 @@ window.addEventListener('pointerup', (e) => {
   let targetPixelY = e.clientY
 
   if (lensState.afGrid) {
-    const clickPctX = ((e.clientX - (vfRect.left + vfRect.width / 2)) / vfRect.width) * 100
-    const clickPctY = ((e.clientY - (vfRect.top + vfRect.height / 2)) / vfRect.height) * 100
+    const clickOffsetX = (e.clientX - (vfRect.left + vfRect.width / 2)) / vfRect.width
+    const clickOffsetY = (e.clientY - (vfRect.top + vfRect.height / 2)) / vfRect.height
 
     let nearestPoint = afPointOffsets[0]
     let minDist = Infinity
 
     afPointOffsets.forEach(pt => {
-      const dist = Math.hypot(pt[0] - clickPctX, pt[1] - clickPctY)
+      const dist = Math.hypot(pt[0] - clickOffsetX, pt[1] - clickOffsetY)
       if (dist < minDist) {
         minDist = dist
         nearestPoint = pt
       }
     })
 
-    targetPixelX = vfRect.left + vfRect.width / 2 + (nearestPoint[0] * vfRect.width / 100)
-    targetPixelY = vfRect.top + vfRect.height / 2 + (nearestPoint[1] * vfRect.height / 100)
+    const framePoint = getFramePoint(vfRect, nearestPoint)
+    targetPixelX = framePoint.x
+    targetPixelY = framePoint.y
   }
 
   focusBox.style.left = `${targetPixelX}px`
@@ -825,19 +982,12 @@ window.addEventListener('pointerup', (e) => {
   focusBox.style.opacity = '1'
   focusBox.style.borderColor = 'rgba(255, 255, 255, 0.8)'
 
-  const canvasRect = canvas.getBoundingClientRect()
-  const viewfinderCenterX = vfRect.left + vfRect.width / 2
-  const viewfinderCenterY = vfRect.top + vfRect.height / 2
-  const canvasCenterX = canvasRect.left + canvasRect.width / 2
-  const canvasCenterY = canvasRect.top + canvasRect.height / 2
-  const projectedPixelX = canvasCenterX + (targetPixelX - viewfinderCenterX) * (canvasRect.width / vfRect.width)
-  const projectedPixelY = canvasCenterY + (targetPixelY - viewfinderCenterY) * (canvasRect.height / vfRect.height)
+  if (vfRect.width === 0 || vfRect.height === 0) return
 
-  if (projectedPixelX < canvasRect.left || projectedPixelX > canvasRect.right ||
-    projectedPixelY < canvasRect.top || projectedPixelY > canvasRect.bottom) return
-
-  mouse.x = ((projectedPixelX - canvasRect.left) / canvasRect.width) * 2 - 1
-  mouse.y = -((projectedPixelY - canvasRect.top) / canvasRect.height) * 2 + 1
+  mouse.x = ((targetPixelX - vfRect.left) / vfRect.width) * 2 - 1
+  mouse.y = -((targetPixelY - vfRect.top) / vfRect.height) * 2 + 1
+  camera.updateMatrixWorld(true)
+  scene.updateMatrixWorld(true)
   raycaster.setFromCamera(mouse, camera)
 
   const objectsToTest = subject ? [subject, cyclorama] : [cyclorama]
@@ -845,11 +995,11 @@ window.addEventListener('pointerup', (e) => {
 
   if (intersects.length > 0) {
     const hitPoint = intersects[0].point
-    const hitPointInCameraSpace = camera.worldToLocal(hitPoint.clone())
+    const hitPointInCameraSpace = hitPoint.clone().applyMatrix4(camera.matrixWorldInverse)
     const focusDist = Math.max(0.1, -hitPointInCameraSpace.z)
 
     lensState.focusDistance = focusDist
-    bokehPass.uniforms.focus.value = focusDist
+    depthOfField.cocMaterial.focusDistance = focusDist
 
     updateDepthOfField()
     updateHUD()
@@ -866,6 +1016,7 @@ window.addEventListener('pointerup', (e) => {
 })
 function animate(time) {
   controls.update()
+  renderer.toneMappingExposure = isCameraMode ? getCameraExposure() : 1
 
   if (turntableState.autoSpin && subject) {
     turntableState.rotation += turntableState.speed
@@ -887,11 +1038,9 @@ function animate(time) {
     rimSoftbox.position.copy(rimLight.position)
     rimSoftbox.lookAt(rimLight.target.position)
 
-    renderer.render(scene, camera)
-  } else {
-    if (bokehPass.enabled) composer.render()
-    else renderer.render(scene, camera)
   }
+
+  composer.render()
 }
 
 renderer.setAnimationLoop(animate)
